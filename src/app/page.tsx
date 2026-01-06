@@ -401,8 +401,11 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
                 type="text"
                 value={companyJobTitle}
                 onChange={(e) => setCompanyJobTitle(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                onKeyUp={(e) => e.stopPropagation()}
                 placeholder="e.g., CTO, VP Engineering, Director"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                autoComplete="off"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
               />
             </div>
             <div className="flex gap-2">

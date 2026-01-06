@@ -214,16 +214,19 @@ export function LiveProfileGraph({ userId, userName, refreshTrigger }: LiveProfi
     <div className={`bg-black/40 backdrop-blur-md rounded-xl overflow-hidden border shadow-xl transition-all duration-500 ${
       justUpdated ? 'border-green-400/50 shadow-green-400/20 shadow-lg' : 'border-white/10'
     }`}>
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-white font-medium">Your Profile</span>
-          {isLoading && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />}
-          {justUpdated && !isLoading && (
-            <span className="text-green-400 text-xs animate-pulse">Updated!</span>
-          )}
+      {/* Header with user name */}
+      <div className="px-4 py-3 border-b border-white/10">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <span className="text-yellow-400 text-lg">●</span>
+            <span className="text-white font-medium">{userName || "Your Profile"}</span>
+            {isLoading && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />}
+            {justUpdated && !isLoading && (
+              <span className="text-green-400 text-xs animate-pulse">Updated!</span>
+            )}
+          </div>
+          <span className="text-white/50 text-xs">{profileItems.length} items</span>
         </div>
-        <span className="text-white/50 text-xs">{profileItems.length} items</span>
       </div>
 
       {/* Main content - Graph + List side by side */}

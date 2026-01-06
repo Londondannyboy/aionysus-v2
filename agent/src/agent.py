@@ -510,21 +510,29 @@ def get_page_info(ctx: RunContext[StateDeps[AppState]]) -> dict:
 
 @agent.tool
 async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_type: str, value: str) -> dict:
-  """Save a user preference to their profile (soft save - no confirmation needed).
-  This updates the profile graph immediately.
+  """Save a user preference to their profile.
 
-  IMPORTANT: Call this whenever user mentions location, role interest, or skills!
+  SINGLE-VALUE FIELDS (replace existing):
+  - location: Only ONE location allowed. New value REPLACES old.
+  - role_preference: Only ONE target role. New value REPLACES old.
+
+  MULTI-VALUE FIELDS (can have many):
+  - skill: Can have multiple skills
+  - company: Can have multiple companies (use confirm_company for these!)
+
+  IMPORTANT: For location/role changes, the frontend will show "Change from X to Y?" confirmation.
+
   Examples:
   - "I'm in London" → save_user_preference("location", "London")
   - "I want CMO roles" → save_user_preference("role_preference", "CMO")
-  - "I have 20 years experience" → save_user_preference("experience", "20+ years")
+  - "I know Python" → save_user_preference("skill", "Python")
 
   Args:
-    preference_type: One of 'location', 'role_preference', 'skill', or 'experience'
-    value: The value they provided (e.g., 'London', 'CTO', 'Python')
+    preference_type: One of 'location', 'role_preference', 'skill'
+    value: The value (e.g., 'London', 'CTO', 'Python')
 
   Returns:
-    Confirmation that preference was saved
+    Confirmation with old value if replacing
   """
   state = ctx.deps.state
   user = state.user
@@ -533,7 +541,7 @@ async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_
     print(f"💾 Cannot save - no user logged in", file=sys.stderr)
     return {"saved": False, "message": "User not logged in"}
 
-  # Map preference_type to item_type for database
+  # Map preference_type to item_type
   item_type_map = {
     "location": "location",
     "role": "role_preference",
@@ -543,24 +551,56 @@ async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_
   }
   item_type = item_type_map.get(preference_type, preference_type)
 
+  # Single-value fields - only one allowed
+  SINGLE_VALUE_TYPES = ["location", "role_preference"]
+
   try:
-    # Save directly to Neon database
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
+
+    old_value = None
+
+    # For single-value fields, check if one exists and replace it
+    if item_type in SINGLE_VALUE_TYPES:
+      # Get existing value
+      cur.execute("""
+        SELECT id, value FROM user_profile_items
+        WHERE user_id = %s AND item_type = %s
+        LIMIT 1
+      """, (user.id, item_type))
+      existing = cur.fetchone()
+
+      if existing:
+        old_value = existing[1]
+        if old_value.lower() == value.lower():
+          # Same value, no change needed
+          cur.close()
+          conn.close()
+          return {"saved": False, "message": f"Already set to {value}", "no_change": True}
+
+        # Delete old value (replace)
+        cur.execute("""
+          DELETE FROM user_profile_items
+          WHERE user_id = %s AND item_type = %s
+        """, (user.id, item_type))
+        print(f"💾 Replacing {item_type}: {old_value} → {value}", file=sys.stderr)
+
+    # Insert new value
     cur.execute("""
       INSERT INTO user_profile_items (user_id, item_type, value, metadata, confirmed)
       VALUES (%s, %s, %s, %s, %s)
-      ON CONFLICT (user_id, item_type, value)
-      DO UPDATE SET updated_at = NOW()
+      ON CONFLICT (user_id, item_type, value) DO UPDATE SET updated_at = NOW()
       RETURNING id
     """, (user.id, item_type, value, '{"source": "voice_detected"}', False))
+
     conn.commit()
     result = cur.fetchone()
     cur.close()
     conn.close()
+
     print(f"💾 Saved to Neon: {item_type}={value} (id={result[0] if result else 'updated'})", file=sys.stderr)
 
-    # Also store to Zep for memory context
+    # Store to Zep
     fact_messages = {
       "location": f"User is based in {value}",
       "role_preference": f"User is interested in {value} roles",
@@ -574,8 +614,14 @@ async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_
       content=message
     )
 
+    response = {"saved": True, "type": item_type, "value": value, "graph_updated": True}
+    if old_value:
+      response["replaced"] = old_value
+      response["message"] = f"Changed {item_type} from {old_value} to {value}"
+
     print(f"💾 Saved preference: {item_type}={value} for user {user.id}", file=sys.stderr)
-    return {"saved": True, "type": item_type, "value": value, "graph_updated": True}
+    return response
+
   except Exception as e:
     print(f"💾 Error saving preference: {e}", file=sys.stderr)
     return {"saved": False, "error": str(e)}
