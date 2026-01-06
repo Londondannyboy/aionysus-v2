@@ -157,6 +157,13 @@ class PageContext(BaseModel):
   total_jobs_on_page: int = 0
   top_roles: list[str] = Field(default_factory=list)
 
+class AmbientScene(BaseModel):
+  """Dynamic background scene based on conversation context"""
+  location: Optional[str] = None  # "london", "manchester", "remote", etc.
+  role: Optional[str] = None  # "cto", "cfo", "cmo", etc.
+  mood: str = "professional"  # "professional", "energetic", "calm"
+  query: Optional[str] = None  # The Unsplash search query to use
+
 class AppState(BaseModel):
   jobs: list[Job] = Field(default_factory=list)
   search_query: str = ""
@@ -166,6 +173,8 @@ class AppState(BaseModel):
   last_discussed_job_details: Optional[dict] = None  # Full details for printing/applying
   # Page-aware context for SEO job pages
   page_context: Optional[PageContext] = None
+  # Dynamic ambient background scene
+  scene: Optional[AmbientScene] = None
 
 # =====
 # Agent
@@ -198,6 +207,20 @@ agent = Agent(
     | market, overview, dashboard | show_market_dashboard |
     | articles, reading, insights | get_featured_articles |
     | my interests, profile, graph | show_user_graph |
+
+    ## AMBIENT SCENE - Create Immersive Experience!
+    When the user mentions a LOCATION or ROLE, call set_ambient_scene to change the background!
+    This creates an immersive visual experience that matches their interests.
+
+    | User mentions... | Call set_ambient_scene with... |
+    |------------------|--------------------------------|
+    | "London", "jobs in London" | location="london" |
+    | "CTO", "tech roles" | role="cto" |
+    | "Manchester marketing" | location="manchester", role="cmo" |
+    | "remote work" | location="remote" |
+    | "startup CTO in SF" | location="san francisco", role="cto" |
+
+    ALWAYS call set_ambient_scene when location or role is first mentioned in conversation!
 
     ## ONBOARDING - Saving User Info
     When user tells you their location, role preference, or experience, SAVE IT:
@@ -944,6 +967,72 @@ def show_a2ui_stats_widget(ctx: RunContext[StateDeps[AppState]]) -> dict:
       ]
     },
     "title": "Market Statistics"
+  }
+
+@agent.tool
+def set_ambient_scene(ctx: RunContext[StateDeps[AppState]], location: str = None, role: str = None) -> dict:
+  """Change the ambient background scene based on conversation context.
+  Call this when the user mentions a specific location or role type to create an immersive experience.
+
+  Args:
+    location: City or area (e.g., "london", "manchester", "remote", "new york")
+    role: Executive role type (e.g., "cto", "cfo", "cmo", "startup")
+
+  Returns:
+    Confirmation and the Unsplash search query being used
+  """
+  print(f"🎨 Setting ambient scene: location={location}, role={role}", file=sys.stderr)
+
+  # Build an evocative search query for Unsplash
+  query_parts = []
+
+  if location:
+    location_queries = {
+      "london": "london skyline cityscape",
+      "manchester": "manchester city urban",
+      "birmingham": "birmingham england city",
+      "bristol": "bristol harbour city",
+      "remote": "home office modern workspace",
+      "new york": "new york manhattan skyline",
+      "san francisco": "san francisco bay area",
+    }
+    query_parts.append(location_queries.get(location.lower(), f"{location} city skyline"))
+
+  if role:
+    role_queries = {
+      "cto": "technology startup office",
+      "cfo": "finance corporate office",
+      "cmo": "creative marketing agency",
+      "coo": "modern business operations",
+      "chro": "diverse team collaboration",
+      "cpo": "product design studio",
+      "startup": "startup office modern",
+    }
+    query_parts.append(role_queries.get(role.lower(), f"{role} professional"))
+
+  # Combine or use defaults
+  if query_parts:
+    search_query = " ".join(query_parts)
+  else:
+    search_query = "executive business professional"
+
+  # Update state with scene info
+  state = ctx.deps.state
+  state.scene = AmbientScene(
+    location=location,
+    role=role,
+    mood="professional",
+    query=search_query
+  )
+
+  print(f"🎨 Scene query: {search_query}", file=sys.stderr)
+
+  return {
+    "scene_updated": True,
+    "location": location,
+    "role": role,
+    "query": search_query,
+    "message": f"Background updated to show {search_query}"
   }
 
 # =====

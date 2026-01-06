@@ -8,6 +8,7 @@ import {
 import { ForceGraph3DComponent, ForceGraphLoading } from "@/components/ForceGraph3D";
 import { A2UIRenderer, A2UILoading } from "@/components/a2ui-renderer";
 import { VoiceInput } from "@/components/voice-input";
+import { DynamicBackground } from "@/components/DynamicBackground";
 import { AgentState } from "@/lib/types";
 import { useCoAgent, useRenderToolCall, useCopilotChat, useHumanInTheLoop } from "@copilotkit/react-core";
 import { CopilotKitCSSProperties, CopilotSidebar } from "@copilotkit/react-ui";
@@ -78,7 +79,8 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
     initialState: {
       jobs: [],
       search_query: "",
-      user: undefined
+      user: undefined,
+      scene: undefined,  // Dynamic background scene
     },
   });
 
@@ -273,6 +275,20 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
     },
   }, []);
 
+  // Ambient Scene - Dynamic background (no UI needed, just state sync)
+  useRenderToolCall({
+    name: "set_ambient_scene",
+    render: ({ result, status }) => {
+      if (status !== "complete" || !result) return <></>;
+      // The background updates via state.scene, just show a subtle confirmation
+      return (
+        <div className="text-xs text-gray-500 italic">
+          Background updated to {result.query}
+        </div>
+      );
+    },
+  }, []);
+
   // Human-in-the-Loop: Job Interest Confirmation
   // When the agent finds a job the user might like, they can confirm/reject
   useHumanInTheLoop({
@@ -341,9 +357,11 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
       suggestions={suggestions}
     >
       <div
-        style={{ backgroundColor: themeColor }}
         className="min-h-screen flex justify-center items-center flex-col transition-colors duration-300 p-8 relative"
       >
+        {/* Dynamic Unsplash Background */}
+        <DynamicBackground scene={state.scene} />
+
         {/* Auth Header */}
         <div className="absolute top-4 right-4 flex items-center gap-3">
           <SignedOut>

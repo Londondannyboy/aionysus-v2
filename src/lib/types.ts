@@ -14,8 +14,16 @@ export type UserProfile = {
   zep_thread_id?: string;  // cached Zep thread ID
 }
 
+export type AmbientScene = {
+  location?: string;  // "london", "manchester", "remote", etc.
+  role?: string;      // "cto", "cfo", "cmo", etc.
+  mood?: string;      // "professional", "energetic", "calm"
+  query?: string;     // The Unsplash search query to use
+}
+
 export type AgentState = {
   jobs: Job[];
   search_query: string;
   user?: UserProfile;
+  scene?: AmbientScene;  // Dynamic ambient background
 }
