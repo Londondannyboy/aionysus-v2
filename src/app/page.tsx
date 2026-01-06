@@ -69,7 +69,7 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
   setLastQuery: (q: string) => void;
 }) {
   // Get user's first name from Neon Auth
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: isSessionLoading } = authClient.useSession();
   const user = session?.user;
   const firstName = user?.name?.split(' ')[0] || null;
 
@@ -384,8 +384,14 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
 
           {/* Voice Input Button */}
           <div className="flex flex-col items-center gap-2 mb-6">
-            <VoiceInput onMessage={handleVoiceMessage} firstName={firstName} userId={user?.id} />
-            <p className="text-white/60 text-sm">Tap to speak</p>
+            {isSessionLoading ? (
+              <div className="w-16 h-16 rounded-full bg-white/20 animate-pulse flex items-center justify-center">
+                <span className="text-white/60 text-xs">...</span>
+              </div>
+            ) : (
+              <VoiceInput onMessage={handleVoiceMessage} firstName={firstName} userId={user?.id} />
+            )}
+            <p className="text-white/60 text-sm">{isSessionLoading ? 'Loading...' : 'Tap to speak'}</p>
           </div>
         </div>
 
