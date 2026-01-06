@@ -1081,3 +1081,205 @@ agent/src/
 ├── clm.py            # CLM endpoint
 └── tools/            # One file per tool category
 ```
+
+---
+
+# Session Learnings: 2025-01-06 (Night) - Profile Building System
+
+## What We Built This Session
+
+### 1. Live Profile Graph Component
+**File**: `src/components/LiveProfileGraph.tsx`
+
+A real-time profile visualization that shows:
+- 3D force graph on the left (visual)
+- Text list on the right (Blade Runner style) with labels
+- Edit/delete buttons on hover
+- Green pulse animation when data updates
+- User name in header with gold dot
+
+```
+┌────────────────────────────────────────────┐
+│ ● Dan                           4 items    │
+├───────────────────┬────────────────────────┤
+│                   │ LOCATION               │
+│    [3D Graph]     │ ● London               │
+│                   │                        │
+│                   │ TARGET ROLE            │
+│                   │ ● CMO                  │
+│                   │                        │
+│                   │ COMPANY                │
+│                   │ ● Sony (CMO) ✓         │
+├───────────────────┴────────────────────────┤
+│ ● Location  ● Role  ● Company  ● Skill     │
+└────────────────────────────────────────────┘
+```
+
+### 2. User Profile Items Table (Neon)
+**Table**: `user_profile_items`
+
+```sql
+CREATE TABLE user_profile_items (
+  id SERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  item_type TEXT NOT NULL,  -- 'location', 'role_preference', 'company', 'skill'
+  value TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}',  -- company_url, job_title, etc.
+  confirmed BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, item_type, value)
+);
+```
+
+### 3. Profile API Endpoints
+**File**: `src/app/api/user-profile/route.ts`
+
+| Method | Purpose |
+|--------|---------|
+| GET | Fetch user's profile items |
+| POST | Save/update profile item (upsert) |
+| DELETE | Remove profile item |
+
+### 4. Single vs Multi-Value Fields
+
+**Single-value** (only ONE allowed, new replaces old):
+- `location` - User's base location
+- `role_preference` - Target role (CMO, CTO, etc.)
+
+**Multi-value** (can have many):
+- `skill` - Multiple skills allowed
+- `company` - Multiple companies (past + current)
+
+When saving a single-value field, the agent:
+1. Checks if one exists
+2. If same value → no change
+3. If different → deletes old, inserts new
+4. Returns `{ replaced: "old_value" }` for confirmation
+
+### 5. Human-in-the-Loop: Company Confirmation
+**Frontend**: `useHumanInTheLoop` hook for `confirm_company`
+
+Flow:
+1. User says "I work at Sony"
+2. Agent calls `confirm_company(company_name="Sony", company_url="https://www.sony.com")`
+3. HITL popup appears with:
+   - Company name
+   - URL link for verification
+   - Job title input field
+   - Confirm/Reject buttons
+4. On confirm → saves to Neon with `confirmed: true`
+5. Graph updates with green pulse
+
+### 6. Direct Database Saves (Fixed)
+**Problem**: Agent's `save_user_preference` was calling `http://localhost:3000/api/user-profile` which doesn't work from Railway.
+
+**Fix**: Save directly to Neon using psycopg2:
+```python
+conn = psycopg2.connect(DATABASE_URL)
+cur = conn.cursor()
+cur.execute("""
+  INSERT INTO user_profile_items (user_id, item_type, value, metadata, confirmed)
+  VALUES (%s, %s, %s, %s, %s)
+  ON CONFLICT (user_id, item_type, value) DO UPDATE SET updated_at = NOW()
+""", (user.id, item_type, value, '{"source": "voice_detected"}', False))
+conn.commit()
+```
+
+---
+
+## Challenges & Solutions
+
+### Challenge 1: Graph showing raw Zep facts
+**Problem**: Graph displayed verbose text like "User 5e421f23... expressed interest in..."
+**Solution**: Entity extraction function that parses facts into clean labels (London, CTO, Sony)
+
+### Challenge 2: HITL not triggering for company
+**Problem**: Backend `confirm_company` tool was shadowing frontend HITL
+**Solution**: Removed backend tool, frontend `useHumanInTheLoop` now receives calls
+
+### Challenge 3: Job title input not working in CopilotKit sidebar
+**Problem**: CopilotKit sidebar intercepting keyboard events
+**Solution**: Added `onKeyDown={(e) => e.stopPropagation()}` to input
+
+### Challenge 4: save_user_preference not saving
+**Problem**: API call to localhost failing from Railway
+**Solution**: Direct psycopg2 database save instead of HTTP call
+
+### Challenge 5: Duplicate locations
+**Problem**: Multiple location entries (Manchester twice, London twice)
+**Solution**: Single-value fields now delete existing before insert
+
+---
+
+## Current State (What Works)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| CopilotKit chat | ✅ Working | Charts, jobs render correctly |
+| Voice (Hume) | ✅ Working | CLM on Railway responds |
+| Profile graph | ✅ Working | Shows Neon data, updates live |
+| Company HITL | ⚠️ Partial | Popup shows, input may need testing |
+| save_user_preference | 🔄 Deploying | Direct DB save just pushed |
+| Single-value replace | 🔄 Deploying | Just pushed |
+
+---
+
+## Deployment URLs
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Frontend | Vercel (auto) | Next.js, CopilotKit |
+| Agent | `copilotkit-agent-production.up.railway.app` | Pydantic AI, CLM |
+| Database | Neon `ep-wandering-darkness-abiq57ia` | PostgreSQL |
+| Voice | Hume Config `acb5575c-e22f-44c0-a9c8-b03305d1ea92` | EVI |
+
+---
+
+## Files Modified This Session
+
+| File | Changes |
+|------|---------|
+| `src/components/LiveProfileGraph.tsx` | New component - graph + text list |
+| `src/app/api/user-profile/route.ts` | New API - GET/POST/DELETE |
+| `src/app/page.tsx` | Added LiveProfileGraph, company HITL, input fix |
+| `agent/src/agent.py` | save_user_preference direct DB, single-value logic, removed backend confirm_company |
+
+---
+
+## Next Steps (Priority Order)
+
+1. **Test save_user_preference** - Say "I'm in Manchester" via voice, check if it saves
+2. **Test company HITL** - Say "I work at Google", verify popup + input works
+3. **Verify single-value replace** - Say "Actually I'm in London" → should replace Manchester
+4. **Add onboarding prompts** - Agent should ASK for missing profile info
+5. **URL validation for companies** - Actually verify company URLs exist
+
+---
+
+## User ID for Testing
+```
+Dan Keegan: 5e421f23-16a6-42de-a4a4-fa412414f1d8
+```
+
+---
+
+## Quick Debug Commands
+
+```bash
+# Check profile items in Neon
+node -e "
+const { neon } = require('@neondatabase/serverless');
+const sql = neon(process.env.DATABASE_URL);
+sql\`SELECT * FROM user_profile_items WHERE user_id = '5e421f23-16a6-42de-a4a4-fa412414f1d8'\`.then(console.log);
+"
+
+# Check Railway logs for save attempts
+railway logs | grep -i "save\|preference\|💾"
+
+# Deploy agent to Railway
+cd agent && railway up
+
+# Check agent is responding
+curl -s https://copilotkit-agent-production.up.railway.app/health
+```
