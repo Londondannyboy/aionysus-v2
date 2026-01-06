@@ -513,6 +513,12 @@ async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_
   """Save a user preference to their profile (soft save - no confirmation needed).
   This updates the profile graph immediately.
 
+  IMPORTANT: Call this whenever user mentions location, role interest, or skills!
+  Examples:
+  - "I'm in London" → save_user_preference("location", "London")
+  - "I want CMO roles" → save_user_preference("role_preference", "CMO")
+  - "I have 20 years experience" → save_user_preference("experience", "20+ years")
+
   Args:
     preference_type: One of 'location', 'role_preference', 'skill', or 'experience'
     value: The value they provided (e.g., 'London', 'CTO', 'Python')
@@ -524,6 +530,7 @@ async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_
   user = state.user
 
   if not user or not user.id:
+    print(f"💾 Cannot save - no user logged in", file=sys.stderr)
     return {"saved": False, "message": "User not logged in"}
 
   # Map preference_type to item_type for database
@@ -532,28 +539,26 @@ async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_
     "role": "role_preference",
     "role_preference": "role_preference",
     "skill": "skill",
-    "experience": "skill",  # Store experience as skill type
+    "experience": "skill",
   }
   item_type = item_type_map.get(preference_type, preference_type)
 
   try:
-    # Save to Neon database via API (soft save, confirmed=false for auto-detected)
-    async with httpx.AsyncClient() as client:
-      # Use internal API - in production this would be the deployed URL
-      api_url = os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
-      response = await client.post(
-        f"{api_url}/api/user-profile",
-        json={
-          "userId": user.id,
-          "itemType": item_type,
-          "value": value,
-          "confirmed": False,  # Soft save - auto-detected
-          "metadata": {"source": "auto_detected"}
-        },
-        timeout=5.0
-      )
-      if response.status_code == 200:
-        print(f"💾 Saved to Neon: {item_type}={value}", file=sys.stderr)
+    # Save directly to Neon database
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+    cur.execute("""
+      INSERT INTO user_profile_items (user_id, item_type, value, metadata, confirmed)
+      VALUES (%s, %s, %s, %s, %s)
+      ON CONFLICT (user_id, item_type, value)
+      DO UPDATE SET updated_at = NOW()
+      RETURNING id
+    """, (user.id, item_type, value, '{"source": "voice_detected"}', False))
+    conn.commit()
+    result = cur.fetchone()
+    cur.close()
+    conn.close()
+    print(f"💾 Saved to Neon: {item_type}={value} (id={result[0] if result else 'updated'})", file=sys.stderr)
 
     # Also store to Zep for memory context
     fact_messages = {
