@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import { authClient } from "@/lib/auth/client";
 import { UserButton, SignedIn, SignedOut } from "@neondatabase/neon-js/auth/react/ui";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+// Dynamic import for 3D graph (SSR issues)
+const EditableGraph3D = dynamic(
+  () => import("@/components/EditableGraph3D").then(mod => mod.EditableGraph3D),
+  { ssr: false, loading: () => <div className="h-[500px] bg-gray-100 rounded-xl animate-pulse" /> }
+);
 
 // Types
 interface Message {
@@ -578,7 +585,7 @@ function PeopleTab({ userId }: { userId: string }) {
   );
 }
 
-// Profile Tab with full CRUD
+// Profile Tab with full CRUD + 3D Graph View
 function ProfileTab({ userId, userName }: { userId: string; userName?: string | null }) {
   const [items, setItems] = useState<ProfileItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -587,6 +594,8 @@ function ProfileTab({ userId, userName }: { userId: string; userName?: string | 
   const [newCompanyUrl, setNewCompanyUrl] = useState("");
   const [urlValidating, setUrlValidating] = useState(false);
   const [urlError, setUrlError] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "graph">("graph"); // Default to graph view
+  const [editingItem, setEditingItem] = useState<ProfileItem | null>(null);
 
   useEffect(() => {
     fetchProfile();
@@ -721,20 +730,127 @@ function ProfileTab({ userId, userName }: { userId: string; userName?: string | 
     company: "bg-orange-100 text-orange-700 border-orange-200",
   };
 
+  // Handle edit from graph
+  const handleGraphEdit = (item: ProfileItem) => {
+    setEditingItem(item);
+    setShowAddModal(item.item_type);
+    setNewValue(item.value);
+    if (item.metadata?.company_url) {
+      setNewCompanyUrl(item.metadata.company_url as string);
+    }
+  };
+
+  // Handle delete from graph
+  const handleGraphDelete = async (item: ProfileItem) => {
+    if (!confirm(`Delete "${item.value}"?`)) return;
+    await deleteItem(item.id);
+  };
+
+  // Handle add from graph
+  const handleGraphAdd = (type: string) => {
+    setEditingItem(null);
+    setShowAddModal(type);
+    setNewValue("");
+    setNewCompanyUrl("");
+    setUrlError("");
+  };
+
+  // Update item (for edit mode)
+  const updateItem = async (type: string) => {
+    if (!newValue.trim() || !editingItem) return;
+
+    // For companies, validate URL first
+    if (type === "company" && newCompanyUrl) {
+      const isValid = await validateCompanyUrl(newCompanyUrl);
+      if (!isValid) return;
+    }
+
+    try {
+      // Delete old and create new (simpler than PATCH)
+      await fetch(`/api/user-profile?id=${editingItem.id}&userId=${userId}`, { method: "DELETE" });
+
+      const metadata: Record<string, unknown> = { source: "dashboard_edit" };
+      if (type === "company" && newCompanyUrl) {
+        metadata.company_url = newCompanyUrl.startsWith('http') ? newCompanyUrl : `https://${newCompanyUrl}`;
+      }
+
+      await fetch("/api/user-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          itemType: type,
+          value: newValue.trim(),
+          metadata,
+          confirmed: type === "company" ? true : false,
+        }),
+      });
+
+      fetchProfile();
+      setShowAddModal(null);
+      setNewValue("");
+      setNewCompanyUrl("");
+      setUrlError("");
+      setEditingItem(null);
+    } catch (e) {
+      console.error("Failed to update:", e);
+    }
+  };
+
   return (
     <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8 pb-6 border-b border-gray-200">
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
-          {userName?.[0] || "?"}
+      {/* Header with View Toggle */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xl font-bold">
+            {userName?.[0] || "?"}
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">{userName || "User"}</h2>
+            <p className="text-gray-500">{items.length} items in your profile</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">{userName || "User"}</h2>
-          <p className="text-gray-500">Manage your profile information</p>
+
+        {/* View Toggle */}
+        <div className="flex bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setViewMode("graph")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === "graph"
+                ? "bg-white shadow text-gray-900"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            🌐 Graph View
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === "list"
+                ? "bg-white shadow text-gray-900"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            📋 List View
+          </button>
         </div>
       </div>
 
-      {/* Profile Sections */}
+      {/* Graph View */}
+      {viewMode === "graph" && (
+        <EditableGraph3D
+          userId={userId}
+          userName={userName || "You"}
+          items={items}
+          onEdit={handleGraphEdit}
+          onDelete={handleGraphDelete}
+          onAdd={handleGraphAdd}
+          height={500}
+        />
+      )}
+
+      {/* List View - Profile Sections */}
+      {viewMode === "list" && (
       <div className="space-y-8">
         {Object.entries(typeLabels).map(([type, label]) => {
           const typeItems = grouped[type] || [];
@@ -811,13 +927,14 @@ function ProfileTab({ userId, userName }: { userId: string; userName?: string | 
           );
         })}
       </div>
+      )}
 
       {/* Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Add {typeLabels[showAddModal]}
+              {editingItem ? "Edit" : "Add"} {typeLabels[showAddModal]}
             </h3>
 
             {/* Value input - dropdown for location/role, text for others */}
@@ -891,17 +1008,18 @@ function ProfileTab({ userId, userName }: { userId: string; userName?: string | 
                   setNewValue("");
                   setNewCompanyUrl("");
                   setUrlError("");
+                  setEditingItem(null);
                 }}
                 className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => addItem(showAddModal)}
+                onClick={() => editingItem ? updateItem(showAddModal) : addItem(showAddModal)}
                 disabled={!newValue.trim() || (showAddModal === "company" && !newCompanyUrl.trim()) || urlValidating}
                 className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
               >
-                {urlValidating ? "Validating..." : "Add"}
+                {urlValidating ? "Validating..." : editingItem ? "Save Changes" : "Add"}
               </button>
             </div>
           </div>
