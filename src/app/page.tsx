@@ -582,6 +582,123 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
     },
   });
 
+  // Human-in-the-Loop: Skill Confirmation with Validation
+  // Common validated skills list
+  const VALIDATED_SKILLS = new Set([
+    // Programming
+    "Python", "JavaScript", "TypeScript", "Java", "C++", "C#", "Go", "Rust", "Ruby", "PHP", "Swift", "Kotlin",
+    // Frameworks
+    "React", "Vue", "Angular", "Next.js", "Node.js", "Django", "Flask", "Spring", "Rails",
+    // Data
+    "SQL", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch", "Kafka",
+    // Cloud/DevOps
+    "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "CI/CD",
+    // AI/ML
+    "Machine Learning", "Deep Learning", "NLP", "Computer Vision", "TensorFlow", "PyTorch",
+    // Business
+    "Product Management", "Project Management", "Agile", "Scrum", "Leadership", "Strategy",
+    "Marketing", "Sales", "Finance", "Operations", "HR", "Legal",
+    // Executive
+    "M&A", "IPO", "Board Management", "P&L Management", "Fundraising", "Investor Relations",
+    "Digital Transformation", "Change Management", "Turnaround", "Scaling",
+  ]);
+
+  const normalizeSkill = (skill: string): string => {
+    const lower = skill.toLowerCase().trim();
+    // Find match in validated skills (case-insensitive)
+    for (const valid of VALIDATED_SKILLS) {
+      if (valid.toLowerCase() === lower) return valid;
+    }
+    // Return title case for unvalidated
+    return skill.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  };
+
+  useHumanInTheLoop({
+    name: "confirm_skill",
+    description: "Confirm user's skill with validation",
+    parameters: [
+      { name: "skill_name", type: "string", description: "The skill to add", required: true },
+      { name: "user_id", type: "string", description: "User ID", required: true },
+    ],
+    render: ({ args, respond, status, result }) => {
+      const normalizedSkill = normalizeSkill(args.skill_name || "");
+      const isValidated = VALIDATED_SKILLS.has(normalizedSkill);
+
+      if (status === "executing" && respond) {
+        return (
+          <div className="p-4 bg-white rounded-lg shadow-lg border border-amber-100 max-w-md">
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                isValidated ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+              }`}>
+                {isValidated ? "✓ Validated Skill" : "⚠ Custom Skill"}
+              </span>
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-2">
+              Add "{normalizedSkill}" to your skills?
+            </h3>
+            {!isValidated && (
+              <p className="text-sm text-amber-600 mb-3">
+                This skill isn't in our standard list. It will be added as a custom skill.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch('/api/user-profile', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        userId: args.user_id,
+                        itemType: 'skill',
+                        value: normalizedSkill,
+                        confirmed: true,
+                        metadata: {
+                          validated: isValidated,
+                          original_input: args.skill_name,
+                          source: 'voice_confirmed',
+                        }
+                      })
+                    });
+                  } catch (e) {
+                    console.error('Failed to save skill:', e);
+                  }
+                  respond({ confirmed: true, skill: normalizedSkill, validated: isValidated });
+                  setTimeout(() => refreshProfile(), 500);
+                }}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors text-white ${
+                  isValidated ? "bg-green-500 hover:bg-green-600" : "bg-amber-500 hover:bg-amber-600"
+                }`}
+              >
+                Yes, add skill
+              </button>
+              <button
+                onClick={() => respond({ confirmed: false, skill: args.skill_name })}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      if (status === "complete" && result) {
+        return (
+          <div className="p-2 text-sm text-gray-600 bg-gray-50 rounded-lg">
+            {result.confirmed
+              ? `Added ${result.skill} ${result.validated ? '✓' : '(custom)'}`
+              : "Skipped"
+            }
+          </div>
+        );
+      }
+
+      return <></>;
+    },
+  });
+
   // Fetch profile items for instructions AND graph
   const [profileItems, setProfileItems] = useState<{location?: string; role?: string; skills?: string[]; companies?: string[]}>({});
   const [fullProfileItems, setFullProfileItems] = useState<Array<{id: number; item_type: string; value: string; metadata: Record<string, unknown>; confirmed: boolean}>>([]);

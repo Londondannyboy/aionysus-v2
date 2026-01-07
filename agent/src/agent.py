@@ -460,6 +460,36 @@ agent = Agent(
 
     IMPORTANT: Use the user's actual ID from state.user.id!
 
+    ## SKILL CONFIRMATION (Human-in-the-Loop)
+    You have access to a FRONTEND TOOL called confirm_skill.
+    This is a HUMAN-IN-THE-LOOP action that validates and confirms skills.
+
+    CRITICAL: When user mentions a skill they have, call confirm_skill!
+
+    **Trigger phrases** (ANY of these → confirm_skill):
+    - "I know [X]"
+    - "I'm skilled in [X]"
+    - "I can do [X]"
+    - "I have experience with [X]"
+    - "I've worked with [X]"
+    - "My skills include [X]"
+    - "I'm good at [X]"
+    - "I specialize in [X]"
+
+    | User says... | Action |
+    |--------------|--------|
+    | "I know Python" | confirm_skill(skill_name="Python", user_id=...) |
+    | "I'm skilled in marketing" | confirm_skill(skill_name="Marketing", user_id=...) |
+    | "I have M&A experience" | confirm_skill(skill_name="M&A", user_id=...) |
+
+    The frontend will:
+    1. Check if it's a validated skill (from a standard list)
+    2. Show green badge for validated skills, amber for custom skills
+    3. Let user confirm before adding
+
+    ⚠️ Do NOT use save_user_preference("skill", ...) for skills!
+    Always use confirm_skill so the user can validate!
+
     CRITICAL RULES:
     - "What is my name/email/skills/role/location?" → ANSWER DIRECTLY from the instructions context!
     - "What page are we on?" → CALL get_page_info, then describe the page!
@@ -722,20 +752,17 @@ async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_
   - location: Only ONE location allowed. New value REPLACES old.
   - role_preference: Only ONE target role. New value REPLACES old.
 
-  MULTI-VALUE FIELDS (can have many):
-  - skill: Can have multiple skills
-  - company: Can have multiple companies (use confirm_company for these!)
-
-  IMPORTANT: For location/role changes, the frontend will show "Change from X to Y?" confirmation.
+  ⚠️ FOR SKILLS: Use confirm_skill() instead! It validates and gets user confirmation.
+  ⚠️ FOR COMPANIES: Use confirm_company() instead! It gets job title too.
 
   Examples:
   - "I'm in London" → save_user_preference("location", "London")
   - "I want CMO roles" → save_user_preference("role_preference", "CMO")
-  - "I know Python" → save_user_preference("skill", "Python")
+  - "I know Python" → confirm_skill("Python", user_id) ← NOT save_user_preference!
 
   Args:
-    preference_type: One of 'location', 'role_preference', 'skill'
-    value: The value (e.g., 'London', 'CTO', 'Python')
+    preference_type: One of 'location', 'role_preference' (NOT skill or company!)
+    value: The value (e.g., 'London', 'CTO')
 
   Returns:
     Confirmation with old value if replacing
