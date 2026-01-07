@@ -919,8 +919,123 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
     },
   });
 
+  // Human-in-the-Loop: Trinity Confirmation (Core Onboarding)
+  // This is the FIRST thing we need to know - why is the user here?
+  const TRINITY_OPTIONS = [
+    {
+      value: 'job_search',
+      label: '🎯 Job Search',
+      description: "I'm looking for a new fractional executive role",
+      color: 'indigo'
+    },
+    {
+      value: 'coaching',
+      label: '🧭 Career Coaching',
+      description: "I want guidance on my career direction and positioning",
+      color: 'purple'
+    },
+    {
+      value: 'skills_development',
+      label: '📚 Skills Development',
+      description: "I want to develop specific skills before my next role",
+      color: 'amber'
+    },
+    {
+      value: 'lifestyle_change',
+      label: '🌴 Lifestyle Change',
+      description: "I'm seeking flexibility - remote work, relocation, or work-life balance",
+      color: 'emerald'
+    },
+  ];
+
+  useHumanInTheLoop({
+    name: "confirm_trinity",
+    description: "Confirm user's primary purpose for using the platform",
+    parameters: [
+      { name: "user_id", type: "string", description: "User ID", required: true },
+      { name: "suggested_trinity", type: "string", description: "Agent's suggested Trinity based on conversation", required: false },
+    ],
+    render: ({ args, respond, status, result }) => {
+      if (status === "executing" && respond) {
+        return (
+          <div className="p-5 bg-white rounded-xl shadow-xl border border-indigo-100 max-w-lg">
+            <div className="mb-4">
+              <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full">
+                🔮 YOUR TRINITY
+              </span>
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              What brings you to Fractional Quest?
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This helps us personalize your experience and connect you with the right opportunities.
+            </p>
+
+            <div className="space-y-3">
+              {TRINITY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={async () => {
+                    // Save Trinity to profile
+                    try {
+                      await fetch('/api/user-profile', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          userId: args.user_id,
+                          itemType: 'trinity',
+                          value: option.value,
+                          confirmed: true,
+                          metadata: {
+                            label: option.label,
+                            description: option.description,
+                            confirmed_at: new Date().toISOString()
+                          }
+                        })
+                      });
+                    } catch (e) {
+                      console.error('Failed to save Trinity:', e);
+                    }
+                    respond({ confirmed: true, trinity: option.value, label: option.label });
+                    setTimeout(() => refreshProfile(), 500);
+                  }}
+                  className={`w-full p-4 text-left rounded-lg border-2 transition-all hover:shadow-md ${
+                    args.suggested_trinity === option.value
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-gray-200 hover:border-indigo-300'
+                  }`}
+                >
+                  <div className="font-semibold text-gray-900">{option.label}</div>
+                  <div className="text-sm text-gray-600 mt-1">{option.description}</div>
+                  {args.suggested_trinity === option.value && (
+                    <div className="text-xs text-indigo-600 mt-2 font-medium">✨ Suggested based on our conversation</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      if (status === "complete" && result) {
+        return (
+          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <p className="text-sm text-indigo-800">
+              <span className="font-semibold">Trinity confirmed:</span> {result.label}
+            </p>
+            <p className="text-xs text-indigo-600 mt-1">
+              Your experience is now personalized to your goals.
+            </p>
+          </div>
+        );
+      }
+
+      return <></>;
+    },
+  });
+
   // Fetch profile items for instructions AND graph
-  const [profileItems, setProfileItems] = useState<{location?: string; role?: string; skills?: string[]; companies?: string[]}>({});
+  const [profileItems, setProfileItems] = useState<{location?: string; role?: string; skills?: string[]; companies?: string[]; trinity?: string; trinityLabel?: string}>({});
   const [fullProfileItems, setFullProfileItems] = useState<Array<{id: number; item_type: string; value: string; metadata: Record<string, unknown>; confirmed: boolean}>>([]);
 
   // Edit modal state (same pattern as dashboard)
@@ -994,9 +1109,13 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
 
         // Group by type for instructions
         const grouped: typeof profileItems = {};
-        items.forEach((item: { item_type: string; value: string }) => {
+        items.forEach((item: { item_type: string; value: string; metadata?: Record<string, unknown> }) => {
           if (item.item_type === 'location') grouped.location = item.value;
           if (item.item_type === 'role_preference') grouped.role = item.value;
+          if (item.item_type === 'trinity') {
+            grouped.trinity = item.value;
+            grouped.trinityLabel = (item.metadata?.label as string) || item.value;
+          }
           if (item.item_type === 'skill') {
             if (!grouped.skills) grouped.skills = [];
             grouped.skills.push(item.value);
@@ -1021,10 +1140,13 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
 - User Name: ${firstName || user.name}
 - User ID: ${user.id}
 - User Email: ${user.email}
+- Trinity: ${profileItems.trinity ? `${profileItems.trinityLabel} (${profileItems.trinity})` : 'Not set - MUST ASK FIRST!'}
 - Location: ${profileItems.location || 'Not set'}
 - Target Role: ${profileItems.role || 'Not set'}
 - Skills: ${profileItems.skills?.join(', ') || 'None saved'}
 - Companies: ${profileItems.companies?.join(', ') || 'None saved'}
+
+${!profileItems.trinity ? `⚠️ TRINITY NOT SET - Before showing jobs or taking actions, call confirm_trinity(user_id="${user.id}") to understand their purpose!` : ''}
 
 PAGE CONTEXT:
 - Current Page: ${pageContext}

@@ -362,6 +362,44 @@ agent = Agent(
     - Use bullet points when listing multiple items
     - Use emojis to add character: 🔥 for hot roles, 🚀 for exciting opportunities, 💰 for salary info, 📍 for locations, ✨ for highlights, 📊 for charts/data
 
+    ## 🔮 TRINITY-FIRST ONBOARDING (CRITICAL!)
+
+    Before ANYTHING else, check if the user has confirmed their TRINITY (purpose).
+    Look in the instructions for "Trinity:" - if it says "Not set", you MUST ask first!
+
+    **Trinity = Why are they here?**
+    - job_search: Looking for a new fractional role
+    - coaching: Want career guidance and positioning help
+    - skills_development: Want to develop skills before next role
+    - lifestyle_change: Seeking flexibility, remote work, relocation
+
+    ### IF NO TRINITY SET:
+    1. DO NOT show jobs or search - they haven't told you what they want!
+    2. IMMEDIATELY call confirm_trinity(user_id=...) to get their purpose
+    3. Wait for them to select before proceeding
+
+    | User says... | If NO Trinity | If HAS Trinity |
+    |--------------|---------------|----------------|
+    | "Show me jobs" | "First, let me understand what brings you here..." → confirm_trinity | search_jobs() |
+    | "Find CTO roles" | "Before we search, I'd love to know your goals..." → confirm_trinity | search_jobs("CTO") |
+    | "What's available?" | "Let's start by understanding your journey..." → confirm_trinity | Depends on Trinity |
+
+    ### ROUTING BY TRINITY:
+    | Trinity | What to do |
+    |---------|------------|
+    | job_search | Full job search, matching, recruiter connections |
+    | coaching | Ask about goals, challenges, build understanding → offer coach connection |
+    | skills_development | Identify gaps, suggest development → then job search |
+    | lifestyle_change | Understand constraints (location, hours) → filter jobs accordingly |
+
+    ### Stage 1 Repo (Basic Profile):
+    After Trinity, gather these basics (if missing):
+    - Employment Status (employed/between roles/freelancing)
+    - Current/Last Company
+    - Location
+    - Professional Vertical (tech/finance/marketing/etc.)
+    - Skills Category (leadership/technical/strategic/creative)
+
     ## CRITICAL: Use Instructions Context for Profile Questions!
 
     The frontend passes you CRITICAL USER CONTEXT in the system instructions with:
