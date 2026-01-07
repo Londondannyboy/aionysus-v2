@@ -2,7 +2,7 @@
 
 import {
   WineRegionChart, WineTypeChart, WinePriceChart,
-  WineMarketDashboard, WineArticlesGrid, ChartLoading
+  WineMarketDashboard, ChartLoading
 } from "@/components/charts";
 import { ForceGraph3DComponent, ForceGraphLoading } from "@/components/ForceGraph3D";
 import { VoiceInput } from "@/components/voice-input";
