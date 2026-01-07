@@ -1501,6 +1501,138 @@ curl -s https://copilotkit-agent-production.up.railway.app/health
 
 ---
 
+# Session Learnings: 2025-01-07 - Fractional Quest v2 Migration
+
+## Current State Summary
+
+### What's Working ✅
+- **CopilotKit chat** - Works on homepage with charts, jobs, graphs
+- **Voice (Hume)** - CLM on Railway responds correctly
+- **Profile graph** - Shows Neon data, updates live
+- **Design system** - Unified CSS in globals.css, Playfair Display fonts
+- **Job pages** - `/fractional-jobs-london`, `/fractional-jobs-uk`, `/fractional-cfo-jobs-uk`
+- **SEO components** - FAQ, WebPageSchema, FAQPageSchema ported
+
+### What Was Just Built (This Session)
+- **ServicesTemplate** - Reusable template for hire-fractional-* pages
+- **/hire-fractional-cmo** - First services page using new template
+- **Hero styling fixed** - Gradient background, white H1
+
+### Outstanding Issues ⚠️
+
+#### 1. Hydration Mismatch (WebPageSchema)
+**File**: `src/components/seo/WebPageSchema.tsx:37`
+```tsx
+// PROBLEM: Server and client render different dates
+dateModified={new Date()}  // Called in ServicesTemplate
+```
+**Fix needed**: Use a static date or generate at build time
+
+#### 2. Page Context Not Reaching Agent
+**Problem**: Agent says "we are currently on the main page" even on /hire-fractional-cmo
+**Root cause**: The `instructions` prop on CopilotSidebar isn't being extracted by the agent middleware
+
+**File**: `src/components/templates/ServicesTemplate.tsx:219-237`
+```tsx
+<CopilotSidebar
+  instructions={`## Service Page Context: Fractional ${roleType}
+  You're helping someone learn about our Fractional ${roleType} services...`}
+/>
+```
+
+**Agent needs**: Middleware to extract page context from system messages
+**Pattern exists**: See "CRITICAL: Passing User Context to Pydantic AI Agent" section above
+
+---
+
+## Pages Inventory
+
+### Existing in copilotkit-demo
+| Page | Status | Notes |
+|------|--------|-------|
+| `/` (homepage) | ✅ Working | Full CopilotKit + Voice |
+| `/fractional-jobs-london` | ✅ Working | SEO page with jobs |
+| `/fractional-jobs-uk` | ✅ Working | SEO page with jobs |
+| `/fractional-cfo-jobs-uk` | ✅ Working | SEO page with jobs |
+| `/hire-fractional-cmo` | ⚠️ Partial | Template done, context issue |
+| `/profile` | ✅ Working | User profile page |
+| `/dashboard` | ✅ Working | Admin dashboard |
+
+### To Build (From fractional.quest)
+**Services Pages (Priority 1 - No SEO risk)**
+- `/hire-fractional-cto`
+- `/hire-fractional-cfo`
+- `/hire-fractional-coo`
+
+**Jobs UK Pages (Priority 2 - Preserve SEO)**
+- `/fractional-cmo-jobs-uk` (15 clicks/day)
+- `/fractional-cto-jobs-uk` (14 clicks/day)
+- `/fractional-coo-jobs-uk` (11 clicks/day)
+- `/london` (40 clicks/day - HIGH PRIORITY)
+
+---
+
+## Next Steps (Priority Order)
+
+### Phase 1: Fix Current Issues
+1. **Fix hydration error** - Use static date in WebPageSchema
+2. **Fix page context** - Add page_context parsing to agent middleware
+3. **Test voice on /hire-fractional-cmo** - Verify it's contextually aware
+
+### Phase 2: Complete Services Pages
+4. Create `/hire-fractional-cto` using ServicesTemplate
+5. Create `/hire-fractional-cfo` using ServicesTemplate
+6. Create `/hire-fractional-coo` using ServicesTemplate
+
+### Phase 3: Recreate High-Traffic Jobs Pages
+7. Create `/fractional-cmo-jobs-uk` (preserve SEO from v1)
+8. Create `/fractional-cto-jobs-uk`
+9. Create `/fractional-coo-jobs-uk`
+10. Create `/london` (40 clicks - high priority!)
+
+---
+
+## Key Files Reference
+
+### Frontend (Next.js)
+| File | Purpose |
+|------|---------|
+| `src/app/globals.css` | Unified design system |
+| `src/app/layout.tsx` | Fonts (Geist, Playfair) |
+| `src/components/templates/ServicesTemplate.tsx` | Services page template |
+| `src/components/seo/FAQ.tsx` | FAQ accordion + FAQ arrays |
+| `src/components/seo/WebPageSchema.tsx` | JSON-LD schema |
+| `src/components/voice-input.tsx` | Hume voice widget |
+
+### Backend (Pydantic AI)
+| File | Purpose |
+|------|---------|
+| `agent/src/agent.py` | Main agent with tools, middleware |
+
+### Database
+- **Table**: `jobs` - All job listings
+- **Table**: `user_profile_items` - User preferences
+
+---
+
+## Quick Debug Commands
+
+```bash
+# Run frontend
+npm run dev
+
+# Run agent locally
+cd agent && uv run uvicorn src.agent:app --reload --port 8000
+
+# Check build
+npm run build
+
+# View page
+open http://localhost:3000/hire-fractional-cmo
+```
+
+---
+
 # Session Learnings: 2025-01-06 (Continued) - Bug Fixes
 
 ## Issues Fixed This Session

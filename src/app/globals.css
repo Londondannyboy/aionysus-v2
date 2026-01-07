@@ -1,86 +1,150 @@
 @import "tailwindcss";
 
-/* ========================================
-   DESIGN SYSTEM TOKENS
-   Clean, consistent, single source of truth
-   ======================================== */
+/* ===========================================
+   FRACTIONAL QUEST V2 - Unified Design System
+   "Conde Nast Meets Bloomberg" Premium Aesthetic
+   =========================================== */
 
 :root {
-  /* Colors - Primary */
-  --color-primary: #6366f1;
-  --color-primary-dark: #4f46e5;
-  --color-primary-light: #818cf8;
+  /* ==========================================
+     CORE COLORS - White-first palette
+     ========================================== */
+  --background: #ffffff;
+  --foreground: #111827;
+  --surface: #f9fafb;
 
-  /* Colors - Accent */
-  --color-accent: #f97316;
-  --color-accent-dark: #ea580c;
+  /* Primary - Black/Dark Gray */
+  --primary: #111827;
+  --primary-light: #374151;
+  --primary-dark: #000000;
 
-  /* Colors - Neutral */
-  --color-background: #ffffff;
-  --color-foreground: #171717;
-  --color-muted: #6b7280;
-  --color-border: #e5e7eb;
+  /* Accent - Royal Blue */
+  --accent: #2563eb;
+  --accent-light: #3b82f6;
+  --accent-dark: #1d4ed8;
 
-  /* Colors - Semantic */
+  /* Secondary Accent - Orange (for CTAs, highlights) */
+  --accent-orange: #f97316;
+  --accent-orange-dark: #ea580c;
+
+  /* Text hierarchy */
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --text-subtle: #9ca3af;
+
+  /* Borders & Dividers */
+  --border-light: #f3f4f6;
+  --border-default: #e5e7eb;
+  --border-dark: #d1d5db;
+
+  /* Semantic Colors */
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
 
-  /* Spacing - Sections */
+  /* ==========================================
+     SHADOWS - Subtle & Elegant
+     ========================================== */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+
+  /* ==========================================
+     SPACING & LAYOUT
+     ========================================== */
   --spacing-section: 4rem;
   --spacing-section-sm: 2rem;
-
-  /* Spacing - Content */
   --spacing-content: 1.5rem;
   --spacing-content-sm: 1rem;
 
   /* Border Radius */
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.5rem;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-
-  /* Typography */
-  --font-sans: system-ui, -apple-system, sans-serif;
-  --font-heading: var(--font-sans);
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 
   /* Max widths */
-  --max-content: 80rem;
+  --max-content: 1280px;
   --max-text: 65ch;
+
+  /* Animation timing */
+  --transition-fast: 150ms;
+  --transition-base: 200ms;
+  --transition-slow: 300ms;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #0a0a0a;
-    --color-foreground: #ededed;
-    --color-muted: #9ca3af;
-    --color-border: #374151;
-  }
+/* ==========================================
+   TAILWIND 4 THEME EXTENSION
+   ========================================== */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-accent-dark: var(--accent-dark);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-border-light: var(--border-light);
+  --color-border-default: var(--border-default);
+  --color-border-dark: var(--border-dark);
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-mono: var(--font-geist-mono), 'SF Mono', 'Consolas', monospace;
+  --font-editorial: var(--font-playfair), Georgia, 'Times New Roman', serif;
 }
 
-/* ========================================
+/* ==========================================
    BASE STYLES
-   ======================================== */
+   ========================================== */
 
 body {
-  background: var(--color-background);
-  color: var(--color-foreground);
+  background: var(--background);
+  color: var(--foreground);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
 }
 
 body, html {
   height: 100%;
 }
 
-/* ========================================
+/* ==========================================
+   TYPOGRAPHY SYSTEM
+   ========================================== */
+
+.font-editorial {
+  font-family: var(--font-editorial);
+}
+
+h1, h2 {
+  font-family: var(--font-editorial);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+
+h3, h4, h5, h6 {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ==========================================
    UTILITY CLASSES
-   Reusable patterns for consistent styling
-   ======================================== */
+   ========================================== */
 
 /* Section wrapper */
 .section {
@@ -93,22 +157,63 @@ body, html {
   padding-inline: var(--spacing-content);
 }
 
+.section-padding {
+  padding-top: clamp(4rem, 8vw, 8rem);
+  padding-bottom: clamp(4rem, 8vw, 8rem);
+}
+
 /* Container */
 .container-content {
   max-width: var(--max-content);
   margin-inline: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
-/* Card base */
+@media (min-width: 640px) {
+  .container-content {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-content {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* ==========================================
+   CARD COMPONENTS
+   ========================================== */
+
+/* Base card */
 .card {
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
+  background: white;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
 }
 
+/* Premium card with hover effect */
+.card-premium {
+  background: white;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-slow);
+}
+
+.card-premium:hover {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Card hover effect standalone */
 .card-hover {
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
 }
 
 .card-hover:hover {
@@ -116,28 +221,142 @@ body, html {
   transform: translateY(-2px);
 }
 
-/* Gradient backgrounds */
+/* ==========================================
+   BUTTON COMPONENTS
+   ========================================== */
+
+/* Primary Button - Solid Black */
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-primary:hover {
+  background: var(--primary-light);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Secondary Button - Outline */
+.btn-secondary {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--border-default);
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-secondary:hover {
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+/* Accent Button - Blue */
+.btn-accent {
+  background: var(--accent);
+  color: white;
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-accent:hover {
+  background: var(--accent-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ==========================================
+   GRADIENT BACKGROUNDS
+   ========================================== */
+
 .gradient-primary {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
 }
 
 .gradient-hero {
   background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%);
 }
 
-/* Text utilities */
+.gradient-accent {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+}
+
+/* ==========================================
+   TEXT UTILITIES
+   ========================================== */
+
 .text-balance {
   text-wrap: balance;
 }
 
 .text-muted {
-  color: var(--color-muted);
+  color: var(--text-muted);
 }
 
-/* ========================================
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+/* ==========================================
+   ANIMATIONS
+   ========================================== */
+
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out;
+}
+
+.animate-pulse-green {
+  animation: pulse-green 2s ease-in-out infinite;
+}
+
+/* ==========================================
    COPILOTKIT CUSTOMIZATION
    Hide branding, customize styles
-   ======================================== */
+   ========================================== */
 
 /* Hide "Powered by CopilotKit" branding */
 .copilotKitVersionInfo,
@@ -149,7 +368,7 @@ body, html {
   display: none !important;
 }
 
-/* Alternative: target by text content if needed */
+/* Target by wrapper if needed */
 .copilotKitSidebarContentWrapper > div:last-child:has(a[href*="copilotkit"]) {
   display: none !important;
 }

@@ -71,6 +71,70 @@ def get_effective_user_name(state_user) -> Optional[str]:
 
 
 # =====
+# Page Context Cache (for CopilotKit instructions parsing)
+# =====
+# When CopilotKit passes page info in instructions, we cache it here
+# so the system prompt and tools can access it even when state.page_context is None
+_cached_page_context: dict = {}
+
+def extract_page_context_from_instructions(instructions: str) -> dict:
+    """Extract page context from CopilotKit instructions text.
+
+    Looks for patterns like:
+    - ## Service Page Context: Fractional CMO
+    - Current Page: hire-fractional-cmo
+    """
+    import re
+    result = {"page_type": None, "role_type": None, "is_services_page": False}
+
+    if not instructions:
+        return result
+
+    # Look for "Service Page Context: Fractional {ROLE}"
+    service_match = re.search(r'Service Page Context:\s*Fractional\s+(\w+)', instructions, re.IGNORECASE)
+    if service_match:
+        role = service_match.group(1).upper()
+        result["page_type"] = f"services_{role.lower()}"
+        result["role_type"] = role
+        result["is_services_page"] = True
+
+        global _cached_page_context
+        _cached_page_context = result
+        print(f"📍 Cached page context from instructions: services page for {role}", file=sys.stderr)
+        return result
+
+    # Look for "Current Page: {page_type}"
+    page_match = re.search(r'Current Page:\s*([^\n]+)', instructions, re.IGNORECASE)
+    if page_match:
+        page_type = page_match.group(1).strip().lower()
+        result["page_type"] = page_type
+
+        _cached_page_context = result
+        print(f"📍 Cached page context from instructions: {page_type}", file=sys.stderr)
+        return result
+
+    # Look for job page context patterns
+    jobs_match = re.search(r'(?:jobs?|listings?)\s+(?:page|for)\s+([^\n,]+)', instructions, re.IGNORECASE)
+    if jobs_match:
+        location = jobs_match.group(1).strip()
+        result["page_type"] = f"jobs_{location.lower()}"
+        result["location_filter"] = location
+
+        _cached_page_context = result
+        print(f"📍 Cached page context from instructions: jobs page for {location}", file=sys.stderr)
+
+    return result
+
+def get_effective_page_context(state_page_context):
+    """Get page context from state or cached instructions."""
+    if state_page_context:
+        return state_page_context
+    if _cached_page_context.get("page_type"):
+        return _cached_page_context
+    return None
+
+
+# =====
 # Zep Memory (copied from lost.london-clm pattern)
 # =====
 ZEP_API_KEY = os.environ.get("ZEP_API_KEY", "")
@@ -785,13 +849,52 @@ The user just looked at this job:
 When the user says "that job", "this one", "it", or similar references, they mean THIS job.
 If they ask to "print it", "save it", "apply", or "tell me more", use this job's details.""")
 
-  # Add page context (for SEO job pages)
-  if state.page_context:
-    pc = state.page_context
-    location = pc.location_filter or "UK"
-    roles = ", ".join(pc.top_roles[:3]) if pc.top_roles else "various roles"
-    print(f"📍 Page context: {pc.page_type}, {location}, {pc.total_jobs_on_page} jobs", file=sys.stderr)
-    prompt_parts.append(f"""
+  # Add page context (for SEO job pages OR services pages)
+  # First check state.page_context, then fall back to cached page context from instructions
+  effective_pc = get_effective_page_context(state.page_context)
+
+  if effective_pc:
+    # Check if it's a dict (from cached) or PageContext object (from state)
+    if isinstance(effective_pc, dict):
+      # Cached page context from instructions
+      page_type = effective_pc.get("page_type", "unknown")
+      is_services = effective_pc.get("is_services_page", False)
+      role_type = effective_pc.get("role_type")
+      location = effective_pc.get("location_filter", "UK")
+
+      if is_services and role_type:
+        print(f"📍 Page context (cached): services page for {role_type}", file=sys.stderr)
+        prompt_parts.append(f"""
+## Current Page Context: SERVICES PAGE
+User is on the "Hire a Fractional {role_type}" services page.
+
+This is NOT a job listings page - it's our services/sales page explaining:
+- What a Fractional {role_type} does
+- Our pricing tiers (Starter £3k, Growth £6k, Scale £9k per month)
+- How the engagement process works
+
+When user asks about:
+- Pricing → Explain our three tiers
+- "How does it work" → Explain our 4-step process (Discovery, Proposal, Strategy, Partnership)
+- Availability → We match them with a {role_type} from our network
+- Whether it's right for them → Ask about their company stage, budget, goals
+
+You're in CONSULTATIVE mode - help them understand if Fractional {role_type} is right for them.""")
+      else:
+        print(f"📍 Page context (cached): {page_type}", file=sys.stderr)
+        prompt_parts.append(f"""
+## Current Page Context:
+User is on: {page_type}
+Location filter: {location}
+
+Tailor your responses to this context.""")
+    else:
+      # PageContext object from state (existing behavior for job pages)
+      pc = effective_pc
+      location = pc.location_filter or "UK"
+      roles = ", ".join(pc.top_roles[:3]) if pc.top_roles else "various roles"
+      print(f"📍 Page context (state): {pc.page_type}, {location}, {pc.total_jobs_on_page} jobs", file=sys.stderr)
+      prompt_parts.append(f"""
 ## Current Page Context:
 User is viewing: {location.upper()} JOBS PAGE
 - Total jobs on page: {pc.total_jobs_on_page}
@@ -836,16 +939,42 @@ def get_page_info(ctx: RunContext[StateDeps[AppState]]) -> dict:
   """Get information about the current page the user is viewing.
   Call this when user asks 'what page', 'where am I', 'current page', etc."""
   state = ctx.deps.state
-  pc = state.page_context
-  if not pc:
+
+  # Use effective page context (state or cached from instructions)
+  effective_pc = get_effective_page_context(state.page_context)
+
+  if not effective_pc:
     return {"page": "main", "location": None, "jobs_count": 0}
 
-  return {
-    "page": pc.page_type,
-    "location": pc.location_filter,
-    "jobs_count": pc.total_jobs_on_page,
-    "top_roles": pc.top_roles,
-  }
+  # Handle dict (cached) vs PageContext object (state)
+  if isinstance(effective_pc, dict):
+    page_type = effective_pc.get("page_type", "unknown")
+    is_services = effective_pc.get("is_services_page", False)
+    role_type = effective_pc.get("role_type")
+
+    if is_services:
+      return {
+        "page": f"services_{role_type.lower() if role_type else 'unknown'}",
+        "page_type": "services",
+        "role": role_type,
+        "is_services_page": True,
+        "description": f"Hire a Fractional {role_type} services page"
+      }
+    else:
+      return {
+        "page": page_type,
+        "location": effective_pc.get("location_filter"),
+        "jobs_count": 0,
+      }
+  else:
+    # PageContext object from state
+    pc = effective_pc
+    return {
+      "page": pc.page_type,
+      "location": pc.location_filter,
+      "jobs_count": pc.total_jobs_on_page,
+      "top_roles": pc.top_roles,
+    }
 
 @agent.tool
 async def save_user_preference(ctx: RunContext[StateDeps[AppState]], preference_type: str, value: str) -> dict:
@@ -2003,10 +2132,10 @@ main_app.add_middleware(
 )
 
 
-# Middleware to extract user info from CopilotKit instructions
+# Middleware to extract user AND page context from CopilotKit instructions
 @main_app.middleware("http")
-async def extract_user_middleware(request: Request, call_next):
-    """Extract user context from CopilotKit instructions before processing."""
+async def extract_context_middleware(request: Request, call_next):
+    """Extract user and page context from CopilotKit instructions before processing."""
     # Only process POST requests that might contain messages
     if request.method == "POST":
         try:
@@ -2016,15 +2145,23 @@ async def extract_user_middleware(request: Request, call_next):
                 body = json.loads(body_bytes)
                 messages = body.get("messages", [])
 
-                # Look for system messages with user context
+                # Look for system messages with user/page context
                 for msg in messages:
                     role = msg.get("role", "")
                     content = msg.get("content", "")
 
-                    if role == "system" and "User ID:" in content:
-                        extracted = extract_user_from_instructions(content)
-                        if extracted.get("user_id"):
-                            print(f"🔐 Middleware extracted user: {extracted.get('name')} ({extracted.get('user_id')[:8]}...)", file=sys.stderr)
+                    if role == "system":
+                        # Extract user context
+                        if "User ID:" in content:
+                            extracted = extract_user_from_instructions(content)
+                            if extracted.get("user_id"):
+                                print(f"🔐 Middleware extracted user: {extracted.get('name')} ({extracted.get('user_id')[:8]}...)", file=sys.stderr)
+
+                        # Extract page context (services pages, job pages, etc.)
+                        if "Service Page Context:" in content or "Current Page:" in content or "jobs" in content.lower():
+                            page_ctx = extract_page_context_from_instructions(content)
+                            if page_ctx.get("page_type"):
+                                print(f"📍 Middleware extracted page: {page_ctx.get('page_type')}", file=sys.stderr)
 
                 # Reconstruct request with body
                 async def receive():
@@ -2032,7 +2169,7 @@ async def extract_user_middleware(request: Request, call_next):
 
                 request = Request(request.scope, receive)
         except Exception as e:
-            print(f"[Middleware] Error extracting user: {e}", file=sys.stderr)
+            print(f"[Middleware] Error extracting context: {e}", file=sys.stderr)
 
     return await call_next(request)
 
