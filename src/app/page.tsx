@@ -13,10 +13,10 @@ import { LiveProfileGraph } from "@/components/LiveProfileGraph";
 import { UserProfileSection } from "@/components/UserProfileSection";
 import dynamic from "next/dynamic";
 
-// Dynamic import for immersive voice graph
-const VoiceGraphInterface = dynamic(
-  () => import("@/components/VoiceGraphInterface").then(mod => mod.VoiceGraphInterface),
-  { ssr: false, loading: () => <div className="w-full h-[500px] bg-gray-900 rounded-2xl animate-pulse" /> }
+// Dynamic import for editable 3D graph (same as dashboard - works!)
+const EditableGraph3D = dynamic(
+  () => import("@/components/EditableGraph3D").then(mod => mod.EditableGraph3D),
+  { ssr: false, loading: () => <div className="w-full h-full bg-gray-900 flex items-center justify-center"><div className="text-white">Loading graph...</div></div> }
 );
 import { AgentState } from "@/lib/types";
 import { useCoAgent, useRenderToolCall, useCopilotChat, useHumanInTheLoop } from "@copilotkit/react-core";
@@ -585,17 +585,66 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
   // Fetch profile items for instructions AND graph
   const [profileItems, setProfileItems] = useState<{location?: string; role?: string; skills?: string[]; companies?: string[]}>({});
   const [fullProfileItems, setFullProfileItems] = useState<Array<{id: number; item_type: string; value: string; metadata: Record<string, unknown>; confirmed: boolean}>>([]);
-  const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const [userNodePosition, setUserNodePosition] = useState<{ x: number; y: number } | null>(null);
 
-  // Graph view modes
+  // Edit modal state (same pattern as dashboard)
+  const [editingItem, setEditingItem] = useState<{id: number; item_type: string; value: string; metadata: Record<string, unknown>; confirmed: boolean} | null>(null);
+  const [showAddModal, setShowAddModal] = useState<string | null>(null);
+  const [newValue, setNewValue] = useState("");
+
+  // Graph view modes (for future views: Career Helix, Trinity, Network)
   type GraphViewType = 'profile' | 'career' | 'trinity' | 'network';
   const [graphView, setGraphView] = useState<GraphViewType>('profile');
 
-  // Stable callback for position updates to prevent VoiceGraphInterface re-renders
-  const handleUserNodePositionChange = useCallback((pos: { x: number; y: number }) => {
-    setUserNodePosition(pos);
+  // Graph edit handlers (same as dashboard)
+  const handleGraphEdit = useCallback((item: {id: number; item_type: string; value: string; metadata: Record<string, unknown>; confirmed: boolean}) => {
+    setEditingItem(item);
+    setShowAddModal(item.item_type);
+    setNewValue(item.value);
   }, []);
+
+  const handleGraphDelete = useCallback(async (item: {id: number; item_type: string; value: string; metadata: Record<string, unknown>; confirmed: boolean}) => {
+    if (!confirm(`Delete "${item.value}"?`)) return;
+    try {
+      await fetch(`/api/user-profile?id=${item.id}&userId=${user?.id}`, { method: "DELETE" });
+      setFullProfileItems(prev => prev.filter(i => i.id !== item.id));
+      refreshProfile();
+    } catch (e) {
+      console.error("Failed to delete:", e);
+    }
+  }, [user?.id, refreshProfile]);
+
+  const handleGraphAdd = useCallback((type: string) => {
+    setEditingItem(null);
+    setShowAddModal(type);
+    setNewValue("");
+  }, []);
+
+  const saveItem = async () => {
+    if (!newValue.trim() || !showAddModal || !user?.id) return;
+    try {
+      if (editingItem) {
+        // Delete old and create new
+        await fetch(`/api/user-profile?id=${editingItem.id}&userId=${user.id}`, { method: "DELETE" });
+      }
+      await fetch("/api/user-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          itemType: showAddModal,
+          value: newValue.trim(),
+          metadata: { source: "homepage" },
+          confirmed: false,
+        }),
+      });
+      refreshProfile();
+      setShowAddModal(null);
+      setNewValue("");
+      setEditingItem(null);
+    } catch (e) {
+      console.error("Failed to save:", e);
+    }
+  };
 
   useEffect(() => {
     if (!user?.id) return;
@@ -688,7 +737,10 @@ Reference the page context when discussing jobs.`;
                   </button>
                 </SignedOut>
                 <SignedIn>
-                  <UserButton />
+                  {/* Wrapper for UserButton visibility on dark background */}
+                  <div className="bg-white rounded-full p-0.5">
+                    <UserButton />
+                  </div>
                   <span className="text-white font-medium">{firstName || user?.name}</span>
                   <button
                     onClick={() => appendMessage(new TextMessage({ content: "Read my messages", role: Role.User }))}
@@ -738,53 +790,36 @@ Reference the page context when discussing jobs.`;
           </div>
         </nav>
 
-        {/* Main Content - FULLSCREEN Graph */}
-        <div className="flex-1 relative overflow-hidden">
+        {/* Main Content - Graph + Voice */}
+        <div className="flex-1 flex flex-col overflow-hidden">
           {isSessionLoading ? (
-            <div className="w-full h-full flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center">
               <div className="text-white">Loading your universe...</div>
             </div>
           ) : user ? (
             <>
-              {/* 3D Profile Graph - FULLSCREEN */}
-              <VoiceGraphInterface
-                userName={firstName || user.name || 'You'}
-                items={fullProfileItems}
-                onUserNodePositionChange={handleUserNodePositionChange}
-              />
-
-              {/* Voice Input - BOUND to user node with smooth transition */}
-              {/* pointer-events-none on container lets mouse events pass through to graph */}
-              <div
-                className="absolute z-30 pointer-events-none transition-all duration-75 ease-out"
-                style={{
-                  left: userNodePosition ? `${userNodePosition.x}px` : '50%',
-                  top: userNodePosition ? `${userNodePosition.y}px` : '50%',
-                  transform: 'translate(-50%, -50%)',
-                }}
-              >
-                <div className="flex flex-col items-center">
-                  {/* Only the voice button captures clicks */}
-                  <div className="pointer-events-auto">
-                    <VoiceInput onMessage={handleVoiceMessage} firstName={firstName} userId={user?.id} />
-                  </div>
-                  <p className="text-white text-sm mt-2 font-bold drop-shadow-lg">{firstName || 'You'}</p>
-                  <p className="text-white/60 text-xs">Tap to speak</p>
-                </div>
+              {/* 3D Profile Graph - Takes most of screen (same component as dashboard!) */}
+              <div className="flex-1 min-h-0">
+                <EditableGraph3D
+                  userId={user.id}
+                  userName={firstName || user.name || 'You'}
+                  items={fullProfileItems}
+                  onEdit={handleGraphEdit}
+                  onDelete={handleGraphDelete}
+                  onAdd={handleGraphAdd}
+                  height={typeof window !== 'undefined' ? window.innerHeight - 160 : 600}
+                />
               </div>
 
-              {/* View indicator + Item count */}
-              <div className="absolute bottom-4 left-4 flex items-center gap-3 z-20">
-                <div className="bg-black/60 px-3 py-1.5 rounded-lg text-white/70 text-xs">
-                  {fullProfileItems.length} profile items
-                </div>
-                {graphView !== 'profile' && (
-                  <div className="bg-violet-600/80 px-3 py-1.5 rounded-lg text-white text-xs font-medium animate-pulse">
-                    {graphView === 'career' && '📈 Career Timeline - Coming Soon'}
-                    {graphView === 'trinity' && '🔺 Trinity View - Coming Soon'}
-                    {graphView === 'network' && '🌐 Network Graph - Coming Soon'}
+              {/* Voice Input - Fixed at bottom */}
+              <div className="shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
+                <div className="max-w-2xl mx-auto flex items-center gap-4">
+                  <VoiceInput onMessage={handleVoiceMessage} firstName={firstName} userId={user.id} />
+                  <div className="flex-1">
+                    <p className="text-white text-sm font-medium">Talk to your AI assistant</p>
+                    <p className="text-gray-400 text-xs">Ask about jobs, update your profile, or get recommendations</p>
                   </div>
-                )}
+                </div>
               </div>
             </>
           ) : (
@@ -803,6 +838,70 @@ Reference the page context when discussing jobs.`;
             </div>
           )}
         </div>
+
+        {/* Edit Modal (same as dashboard) */}
+        {showAddModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                {editingItem ? "Edit" : "Add"} {showAddModal.replace('_', ' ')}
+              </h3>
+
+              {showAddModal === "location" ? (
+                <select
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  className="w-full p-3 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select location...</option>
+                  {["London", "Manchester", "Birmingham", "Remote", "Edinburgh", "Bristol", "Leeds"].map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              ) : showAddModal === "role_preference" ? (
+                <select
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  className="w-full p-3 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select role...</option>
+                  {["CEO", "CFO", "CMO", "CTO", "COO", "CHRO", "CIO", "CISO", "CPO", "CRO", "VP", "Director"].map((role) => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  placeholder={showAddModal === "skill" ? "e.g., Python, Leadership, M&A" : "Enter value..."}
+                  className="w-full p-3 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowAddModal(null);
+                    setNewValue("");
+                    setEditingItem(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveItem}
+                  disabled={!newValue.trim()}
+                  className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
+                >
+                  {editingItem ? "Save Changes" : "Add"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </CopilotSidebar>
   );
