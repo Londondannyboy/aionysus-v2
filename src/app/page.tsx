@@ -18,6 +18,7 @@ import { Role, TextMessage } from "@copilotkit/runtime-client-gql";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { UserButton, SignedIn, SignedOut } from "@neondatabase/neon-js/auth/react/ui";
 import { authClient } from "@/lib/auth/client";
+import { usePathname } from "next/navigation";
 
 // Messages badge component
 function MessagesBadge({ userId }: { userId?: string }) {
@@ -103,6 +104,25 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
   lastQuery: string;
   setLastQuery: (q: string) => void;
 }) {
+  // Get current page path for context
+  const pathname = usePathname();
+
+  // Parse pathname to human-readable page context
+  const getPageContext = (path: string): string => {
+    if (path === "/" || path === "") return "Homepage - main job search and profile view";
+    if (path === "/dashboard") return "Dashboard - managing messages, connections, and profile";
+    if (path.includes("fractional-jobs-london")) return "London Jobs page - focused on London fractional executive positions";
+    if (path.includes("fractional-cto")) return "CTO Jobs page - focused on Chief Technology Officer roles";
+    if (path.includes("fractional-cfo")) return "CFO Jobs page - focused on Chief Financial Officer roles";
+    if (path.includes("fractional-cmo")) return "CMO Jobs page - focused on Chief Marketing Officer roles";
+    if (path.includes("fractional-coo")) return "COO Jobs page - focused on Chief Operating Officer roles";
+    if (path.includes("fractional-chro")) return "CHRO Jobs page - focused on Chief HR Officer roles";
+    if (path.includes("profile")) return "Profile page - viewing/editing user profile";
+    return `Page: ${path}`;
+  };
+
+  const pageContext = getPageContext(pathname);
+
   // Get user's first name from Neon Auth
   const { data: session, isPending: isSessionLoading } = authClient.useSession();
   const user = session?.user;
@@ -590,7 +610,7 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
     fetchProfile();
   }, [user?.id, profileRefreshTrigger]);
 
-  // Build instructions with FULL user context including profile items
+  // Build instructions with FULL user context including profile items AND page context
   const agentInstructions = user
     ? `CRITICAL USER CONTEXT:
 - User Name: ${firstName || user.name}
@@ -601,10 +621,21 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
 - Skills: ${profileItems.skills?.join(', ') || 'None saved'}
 - Companies: ${profileItems.companies?.join(', ') || 'None saved'}
 
-When the user asks about their profile, skills, companies, location, etc., use the above info.
+PAGE CONTEXT:
+- Current Page: ${pageContext}
+- URL Path: ${pathname}
+
+When user asks about their profile, skills, companies, location, etc., use the above info.
 When they ask about messages, use their User ID for database lookups.
+When they mention "jobs here" or "on this page", reference the current page context.
+If they're on a specific role page (CTO, CFO, etc.), assume they're interested in that role type.
 Always greet them as ${firstName || user.name} and be friendly.`
-    : undefined;
+    : `PAGE CONTEXT:
+- Current Page: ${pageContext}
+- URL Path: ${pathname}
+
+This user is not logged in. Encourage them to sign in for personalized recommendations.
+Reference the page context when discussing jobs.`;
 
   return (
     <CopilotSidebar
@@ -625,15 +656,22 @@ Always greet them as ${firstName || user.name} and be friendly.`
 
         {/* Auth Header with Messages Badge */}
         <div className="absolute top-4 right-4 flex items-center gap-3">
-          <SignedOut>
-            <button
-              onClick={() => window.location.href = '/auth/sign-in'}
-              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg backdrop-blur transition-colors"
-            >
-              Sign In
-            </button>
-          </SignedOut>
-          <SignedIn>
+          {/* Show loading state while session is being checked */}
+          {isSessionLoading ? (
+            <div className="bg-white/20 text-white/60 px-4 py-2 rounded-lg backdrop-blur animate-pulse">
+              Loading...
+            </div>
+          ) : (
+            <>
+              <SignedOut>
+                <button
+                  onClick={() => window.location.href = '/auth/sign-in'}
+                  className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg backdrop-blur transition-colors"
+                >
+                  Sign In
+                </button>
+              </SignedOut>
+              <SignedIn>
             {/* Messages button with badge - clicks to open sidebar and ask about messages */}
             <button
               onClick={() => {
@@ -654,8 +692,10 @@ Always greet them as ${firstName || user.name} and be friendly.`
             >
               Dashboard
             </a>
-            <UserButton />
-          </SignedIn>
+                <UserButton />
+              </SignedIn>
+            </>
+          )}
         </div>
 
         {/* Main Content - Graph + Voice */}
@@ -666,29 +706,37 @@ Always greet them as ${firstName || user.name} and be friendly.`
           </h1>
 
           {/* User Profile Section - Edit and view profile data */}
-          <SignedIn>
-            <div className="w-full max-w-md">
-              <UserProfileSection
-                userId={user?.id}
-                userName={firstName || undefined}
-                refreshTrigger={profileRefreshTrigger}
-                onProfileUpdate={refreshProfile}
-              />
+          {isSessionLoading ? (
+            <div className="w-full max-w-md bg-black/40 backdrop-blur-md rounded-xl p-6 animate-pulse">
+              <div className="h-32 bg-white/10 rounded-lg" />
             </div>
-          </SignedIn>
+          ) : (
+            <>
+              <SignedIn>
+                <div className="w-full max-w-md">
+                  <UserProfileSection
+                    userId={user?.id}
+                    userName={firstName || undefined}
+                    refreshTrigger={profileRefreshTrigger}
+                    onProfileUpdate={refreshProfile}
+                  />
+                </div>
+              </SignedIn>
 
-          {/* Not signed in - prompt */}
-          <SignedOut>
-            <div className="bg-black/40 backdrop-blur-md rounded-xl p-6 text-center border border-white/10 max-w-sm">
-              <p className="text-white/80 mb-4">Sign in to see your profile graph</p>
-              <button
-                onClick={() => window.location.href = '/auth/sign-in'}
-                className="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded-lg transition-colors"
-              >
-                Sign In
-              </button>
-            </div>
-          </SignedOut>
+              {/* Not signed in - prompt */}
+              <SignedOut>
+                <div className="bg-black/40 backdrop-blur-md rounded-xl p-6 text-center border border-white/10 max-w-sm">
+                  <p className="text-white/80 mb-4">Sign in to see your profile graph</p>
+                  <button
+                    onClick={() => window.location.href = '/auth/sign-in'}
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded-lg transition-colors"
+                  >
+                    Sign In
+                  </button>
+                </div>
+              </SignedOut>
+            </>
+          )}
 
           {/* Voice Input Button */}
           <div className="flex flex-col items-center gap-2">
