@@ -2357,16 +2357,24 @@ async def clm_endpoint(request: Request):
     body = await request.json()
     messages = body.get("messages", [])
 
+    # DEBUG: Log all possible session ID sources
+    print(f"[CLM] === SESSION ID DEBUG ===", file=sys.stderr)
+    print(f"[CLM] body.custom_session_id: {body.get('custom_session_id')}", file=sys.stderr)
+    print(f"[CLM] body.session_id: {body.get('session_id')}", file=sys.stderr)
+    print(f"[CLM] metadata: {body.get('metadata', {})}", file=sys.stderr)
+    print(f"[CLM] x-hume-session-id header: {request.headers.get('x-hume-session-id')}", file=sys.stderr)
+    print(f"[CLM] x-session-id header: {request.headers.get('x-session-id')}", file=sys.stderr)
+
     # Extract session info
     session_id = extract_session_id(request, body)
+    print(f"[CLM] Final extracted session_id: {session_id}", file=sys.stderr)
+
     parsed = parse_session_id(session_id)
     first_name = parsed["first_name"]
     user_id = parsed["user_id"]
     page_context = parsed["page_context"]
 
-    print(f"[CLM] User: {first_name or 'anon'}, ID: {user_id or 'none'}", file=sys.stderr)
-    if page_context:
-        print(f"[CLM] Page: {page_context}", file=sys.stderr)
+    print(f"[CLM] Parsed: name={first_name}, id={user_id}, page={page_context}", file=sys.stderr)
 
     # Get last user message
     user_msg = ""

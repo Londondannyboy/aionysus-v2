@@ -7,9 +7,13 @@ interface PageContext {
   location?: string;
   totalJobs?: number;
   topRoles?: string[];
-  // For services pages
-  pageType?: 'jobs' | 'services';
-  roleType?: string;  // CMO, CTO, CFO, COO for services pages
+  // Page type for context
+  pageType?: 'jobs' | 'services' | 'hiring_guide' | 'guide' | 'salary' | 'home';
+  roleType?: string;  // CMO, CTO, CFO, COO for role-specific pages
+  // Rich page context (for clarity)
+  pageH1?: string;      // The main H1 headline of the page
+  pageUrl?: string;     // The URL path e.g., "/hire-fractional-cmo"
+  pageDescription?: string;  // Brief description of what the page is about
 }
 
 interface VoiceButtonProps {
@@ -131,10 +135,18 @@ Previous greeting was ${Math.round(timeSinceLastInteraction / 1000)}s ago - they
         // Build page context section - different for jobs vs services pages
         let pageContextSection = "";
         if (pageContext?.pageType === 'services' && pageContext?.roleType) {
-          // SERVICES PAGE context
+          // SERVICES PAGE context - include H1 and description if available
+          const h1 = pageContext.pageH1 || `Hire a Fractional ${pageContext.roleType}`;
+          const url = pageContext.pageUrl || `/hire-fractional-${pageContext.roleType.toLowerCase()}`;
+          const desc = pageContext.pageDescription || `Strategic ${pageContext.roleType} leadership without the full-time commitment.`;
+
           pageContextSection = `
 PAGE_CONTEXT: SERVICES PAGE
-User is viewing: "Hire a Fractional ${pageContext.roleType}" services page.
+=== CRITICAL: YOU MUST KNOW THIS PAGE ===
+Page URL: ${url}
+Page H1: "${h1}"
+Page Description: "${desc}"
+Page Type: Fractional ${pageContext.roleType} Services Page
 
 This is NOT a job listings page - it's our SERVICES/SALES page explaining:
 - What a Fractional ${pageContext.roleType} does
@@ -147,8 +159,9 @@ Your role here is CONSULTATIVE:
 - Answer questions about the process
 - Guide interested visitors toward booking a discovery call
 
-When they ask "what page is this" or "where am I", say:
-"We're on the Hire a Fractional ${pageContext.roleType} services page."
+When they ask "what page is this" or "where am I", you MUST say:
+"We're on the ${h1} services page at ${url}."
+DO NOT say "main page" or "jobs page" - we are on ${h1}.
 `;
         } else if (pageContext?.location) {
           // JOBS PAGE context

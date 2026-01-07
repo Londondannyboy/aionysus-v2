@@ -283,6 +283,9 @@ ${tiers.map(t => `- ${t.name}: ${t.price} (${t.description})`).join('\n')}
                   pageContext={{
                     pageType: 'services',
                     roleType: roleType,
+                    pageH1: heroHeadline,
+                    pageUrl: `/hire-fractional-${roleType.toLowerCase()}`,
+                    pageDescription: heroSubheadline,
                   }}
                 />
                 <span className="text-sm opacity-70">
