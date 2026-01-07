@@ -1182,6 +1182,7 @@ async def assess_job_match(ctx: RunContext[StateDeps[AppState]], job_title: Opti
   - Matching skills
   - Missing skills/requirements
   - Recommendation (apply/upskill/skip)
+  - Recruiter details if 90%+ match on active recruitment job
   """
   print(f"📊 Assessing job match for: {job_title or 'last discussed job'}", file=sys.stderr)
 
@@ -1189,15 +1190,24 @@ async def assess_job_match(ctx: RunContext[StateDeps[AppState]], job_title: Opti
   user = state.user
   user_id = get_effective_user_id(user)
 
-  # Get job details
+  # Get job details including recruiter info
   job = None
+  recruiter = None
+  job_required_skills = []
+
   if job_title:
-    # Search for specific job
+    # Search for specific job with recruiter info
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
     cur.execute("""
-      SELECT title, company, location, salary_min, salary_max, description, role_type
-      FROM test_jobs WHERE LOWER(title) LIKE %s LIMIT 1
+      SELECT j.title, j.company, j.location, j.salary_min, j.salary_max,
+             j.description, j.role_type, j.required_skills, j.is_active_recruitment,
+             j.recruiter_id, u.display_name, u.company as recruiter_company,
+             u.title as recruiter_title, u.email, u.phone, u.calendly_url
+      FROM test_jobs j
+      LEFT JOIN user_types u ON j.recruiter_id = u.user_id
+      WHERE LOWER(j.title) LIKE %s
+      LIMIT 1
     """, (f"%{job_title.lower()}%",))
     row = cur.fetchone()
     cur.close()
@@ -1206,8 +1216,27 @@ async def assess_job_match(ctx: RunContext[StateDeps[AppState]], job_title: Opti
       job = {
         "title": row[0], "company": row[1], "location": row[2],
         "salary_min": row[3], "salary_max": row[4],
-        "description": row[5], "role_type": row[6]
+        "description": row[5], "role_type": row[6],
+        "is_active_recruitment": row[8]
       }
+      # Parse required_skills JSON
+      if row[7]:
+        try:
+          import json
+          job_required_skills = json.loads(row[7]) if isinstance(row[7], str) else row[7]
+        except:
+          job_required_skills = []
+      # Get recruiter info if active recruitment
+      if row[8] and row[9]:  # is_active_recruitment and recruiter_id
+        recruiter = {
+          "name": row[10],
+          "company": row[11],
+          "title": row[12],
+          "email": row[13],
+          "phone": row[14],
+          "calendly_url": row[15]
+        }
+        print(f"📊 Active recruitment job - recruiter: {recruiter['name']}", file=sys.stderr)
   elif state.last_discussed_job_details:
     job = state.last_discussed_job_details
 
@@ -1238,20 +1267,23 @@ async def assess_job_match(ctx: RunContext[StateDeps[AppState]], job_title: Opti
     except Exception as e:
       print(f"Error fetching profile: {e}", file=sys.stderr)
 
-  # Parse job requirements (simple keyword extraction)
+  # Use job's required_skills if available, otherwise extract from description
   job_desc = (job.get("description") or "").lower()
-  job_role = (job.get("role_type") or "").lower()
   job_location = (job.get("location") or "").lower()
 
-  # Common skill keywords to look for
-  skill_keywords = [
-    "python", "javascript", "react", "aws", "azure", "sql", "leadership",
-    "strategy", "m&a", "fundraising", "p&l", "marketing", "sales", "finance",
-    "operations", "digital transformation", "agile", "product", "design",
-    "ai", "machine learning", "data", "analytics", "growth", "b2b", "saas"
-  ]
+  if job_required_skills:
+    required_skills = [s.lower() for s in job_required_skills]
+  else:
+    # Fallback: extract from description
+    skill_keywords = [
+      "python", "javascript", "react", "aws", "azure", "sql", "leadership",
+      "strategy", "m&a", "fundraising", "p&l", "marketing", "sales", "finance",
+      "operations", "digital transformation", "agile", "product", "design",
+      "ai", "machine learning", "data", "analytics", "growth", "b2b", "saas",
+      "fintech", "architecture", "scaling", "ecommerce", "digital"
+    ]
+    required_skills = [s for s in skill_keywords if s in job_desc]
 
-  required_skills = [s for s in skill_keywords if s in job_desc]
   matching_skills = [s for s in required_skills if s in user_skills]
   missing_skills = [s for s in required_skills if s not in user_skills]
 
@@ -1263,7 +1295,11 @@ async def assess_job_match(ctx: RunContext[StateDeps[AppState]], job_title: Opti
   total_match = min(100, int(skill_match + location_match + experience_match))
 
   # Determine recommendation
-  if total_match >= 80:
+  if total_match >= 90:
+    recommendation = "hot_match"
+    icon = "🔥"
+    message = "Hot match! You're an excellent fit for this role."
+  elif total_match >= 80:
     recommendation = "strong_match"
     icon = "🚀"
     message = "Excellent fit! You match most requirements."
@@ -1280,12 +1316,13 @@ async def assess_job_match(ctx: RunContext[StateDeps[AppState]], job_title: Opti
     icon = "❌"
     message = "Significant gaps. Consider building more relevant experience."
 
-  return {
+  result = {
     "job": {
       "title": job["title"],
       "company": job.get("company", "Unknown"),
       "location": job.get("location", "Remote"),
-      "role_type": job.get("role_type")
+      "role_type": job.get("role_type"),
+      "is_active_recruitment": job.get("is_active_recruitment", False)
     },
     "assessment": {
       "match_percentage": total_match,
@@ -1301,6 +1338,14 @@ async def assess_job_match(ctx: RunContext[StateDeps[AppState]], job_title: Opti
     "location_match": location_match > 0,
     "user_id": user_id
   }
+
+  # Add recruiter info for 90%+ match on active recruitment jobs
+  if total_match >= 90 and recruiter and job.get("is_active_recruitment"):
+    result["recruiter"] = recruiter
+    result["assessment"]["message"] = f"🔥 Hot match! {recruiter['name']} from {recruiter['company']} is actively recruiting for this role."
+    print(f"📊 90%+ match on recruiter job - showing recruiter: {recruiter['name']}", file=sys.stderr)
+
+  return result
 
 @agent.tool
 def show_jobs_chart(ctx: RunContext[StateDeps[AppState]]) -> dict:

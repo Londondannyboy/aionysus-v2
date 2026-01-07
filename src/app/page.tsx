@@ -418,23 +418,35 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
     },
   }, []);
 
-  // Job Match Assessment - AG-UI Card
+  // Job Match Assessment - AG-UI Card with Recruiter
   useRenderToolCall({
     name: "assess_job_match",
     render: ({ result, status }) => {
       if (status !== "complete" || !result) return <ChartLoading title="Assessing match..." />;
       if (result.error) return <div className="text-red-500 text-sm p-2">{result.error}</div>;
 
-      const { job, assessment, skills } = result;
-      const matchColor = assessment.match_percentage >= 80 ? "text-green-500" :
+      const { job, assessment, skills, recruiter } = result;
+      const isHotMatch = assessment.match_percentage >= 90 && recruiter;
+      const matchColor = assessment.match_percentage >= 90 ? "text-orange-500" :
+                        assessment.match_percentage >= 80 ? "text-green-500" :
                         assessment.match_percentage >= 60 ? "text-yellow-500" :
                         assessment.match_percentage >= 40 ? "text-orange-500" : "text-red-500";
-      const bgColor = assessment.match_percentage >= 80 ? "bg-green-50 border-green-200" :
+      const bgColor = isHotMatch ? "bg-gradient-to-br from-orange-50 to-amber-50 border-orange-300" :
+                      assessment.match_percentage >= 80 ? "bg-green-50 border-green-200" :
                       assessment.match_percentage >= 60 ? "bg-yellow-50 border-yellow-200" :
                       assessment.match_percentage >= 40 ? "bg-orange-50 border-orange-200" : "bg-red-50 border-red-200";
 
       return (
         <div className={`p-4 rounded-xl border-2 ${bgColor} max-w-md`}>
+          {/* Hot Match Badge */}
+          {isHotMatch && (
+            <div className="mb-3 flex items-center gap-2">
+              <span className="px-3 py-1 bg-orange-500 text-white text-xs font-bold rounded-full animate-pulse">
+                🔥 HOT MATCH - Active Recruitment
+              </span>
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -450,6 +462,7 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
           <div className="h-3 bg-gray-200 rounded-full mb-3 overflow-hidden">
             <div
               className={`h-full rounded-full transition-all ${
+                isHotMatch ? "bg-gradient-to-r from-orange-500 to-amber-500" :
                 assessment.match_percentage >= 80 ? "bg-green-500" :
                 assessment.match_percentage >= 60 ? "bg-yellow-500" :
                 assessment.match_percentage >= 40 ? "bg-orange-500" : "bg-red-500"
@@ -460,6 +473,51 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
 
           {/* Message */}
           <p className="text-sm text-gray-700 mb-3">{assessment.message}</p>
+
+          {/* Recruiter Card - Only for 90%+ matches */}
+          {recruiter && (
+            <div className="mb-4 p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+              <p className="text-xs text-orange-600 font-semibold mb-2">👤 Your Recruiter Contact</p>
+              <div className="space-y-1">
+                <p className="font-semibold text-gray-900">{recruiter.name}</p>
+                <p className="text-sm text-gray-600">{recruiter.title} @ {recruiter.company}</p>
+                {recruiter.email && (
+                  <p className="text-sm">
+                    <a href={`mailto:${recruiter.email}`} className="text-blue-600 hover:underline">
+                      {recruiter.email}
+                    </a>
+                  </p>
+                )}
+                {recruiter.phone && (
+                  <p className="text-sm">
+                    <a href={`tel:${recruiter.phone}`} className="text-blue-600 hover:underline">
+                      {recruiter.phone}
+                    </a>
+                  </p>
+                )}
+              </div>
+              <div className="mt-3 flex gap-2">
+                {recruiter.email && (
+                  <a
+                    href={`mailto:${recruiter.email}?subject=Interest in ${job.title} role&body=Hi ${recruiter.name},%0D%0A%0D%0AI scored ${assessment.match_percentage}% on your ${job.title} position at ${job.company} and would love to discuss the opportunity.%0D%0A%0D%0ABest regards`}
+                    className="flex-1 text-center px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    📧 Email {recruiter.name.split(' ')[0]}
+                  </a>
+                )}
+                {recruiter.calendly_url && (
+                  <a
+                    href={recruiter.calendly_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 text-center px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    📅 Book Call
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Skills */}
           <div className="space-y-2">
@@ -486,7 +544,7 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
           </div>
 
           {/* Action hint */}
-          {skills.missing.length > 0 && (
+          {!recruiter && skills.missing.length > 0 && (
             <p className="text-xs text-gray-500 mt-3 italic">
               💡 Tip: Add missing skills to your profile to improve your match!
             </p>
