@@ -177,6 +177,66 @@ export const COO_FAQS: FAQItem[] = [
   },
 ]
 
+export const CHRO_FAQS: FAQItem[] = [
+  {
+    question: 'What is a Fractional CHRO?',
+    answer: 'A Fractional CHRO (Chief Human Resources Officer) is an experienced HR executive who works with companies on a part-time basis. They provide strategic HR leadership, build people operations, develop talent strategies, and create the HR infrastructure needed to scale.',
+  },
+  {
+    question: 'How much do Fractional CHRO jobs pay in the UK?',
+    answer: 'Fractional CHRO day rates in the UK typically range from £600 to £1,100 per day. Rates vary based on company size, complexity of HR challenges, and whether the role includes executive coaching or organisational development.',
+  },
+  {
+    question: 'When should a company hire a Fractional CHRO?',
+    answer: 'Companies typically hire Fractional CHROs when scaling rapidly and need to professionalise HR, preparing for significant hiring phases, building company culture during growth, implementing performance management systems, or navigating complex people challenges like restructuring.',
+  },
+]
+
+export const CEO_FAQS: FAQItem[] = [
+  {
+    question: 'What is a Fractional CEO?',
+    answer: 'A Fractional CEO (Chief Executive Officer) is an experienced executive who provides part-time leadership to companies, typically during transitions, turnarounds, or when founders need experienced guidance. They may serve as interim CEO or work alongside existing leadership.',
+  },
+  {
+    question: 'How much do Fractional CEO jobs pay in the UK?',
+    answer: 'Fractional CEO day rates in the UK typically range from £1,000 to £2,000 per day, reflecting the seniority and responsibility of the role. Many arrangements also include performance-based compensation or equity participation.',
+  },
+  {
+    question: 'When should a company hire a Fractional CEO?',
+    answer: 'Companies hire Fractional CEOs during leadership transitions, when founders want to step back, during turnaround situations, when preparing for exits or acquisitions, or when the board wants experienced executive guidance alongside a founder CEO.',
+  },
+]
+
+export const CPO_FAQS: FAQItem[] = [
+  {
+    question: 'What is a Fractional CPO?',
+    answer: 'A Fractional CPO (Chief Product Officer) is an experienced product executive who works with companies on a part-time basis. They provide product strategy, build product teams, establish product processes, and guide product-market fit and roadmap development.',
+  },
+  {
+    question: 'How much do Fractional CPO jobs pay in the UK?',
+    answer: 'Fractional CPO day rates in the UK typically range from £800 to £1,400 per day. Rates are influenced by product complexity, whether the role is B2B or B2C, and expertise in specific methodologies like PLG or enterprise product development.',
+  },
+  {
+    question: 'When should a company hire a Fractional CPO?',
+    answer: 'Companies hire Fractional CPOs when building their first product team, transitioning from founder-led to professional product management, launching new product lines, pivoting product strategy, or when needing senior product guidance without full-time commitment.',
+  },
+]
+
+export const CISO_FAQS: FAQItem[] = [
+  {
+    question: 'What is a Fractional CISO?',
+    answer: 'A Fractional CISO (Chief Information Security Officer) is an experienced security executive who works with companies on a part-time basis. They develop security strategies, ensure compliance, manage risk, and build security programs without the cost of a full-time CISO.',
+  },
+  {
+    question: 'How much do Fractional CISO jobs pay in the UK?',
+    answer: 'Fractional CISO day rates in the UK typically range from £900 to £1,500 per day, reflecting the specialised nature of security expertise. Rates are higher for those with compliance certifications (ISO 27001, SOC 2) or experience in regulated industries.',
+  },
+  {
+    question: 'When should a company hire a Fractional CISO?',
+    answer: 'Companies hire Fractional CISOs when preparing for security audits or certifications, responding to security incidents, needing to demonstrate security posture to enterprise customers, building security programs, or when compliance requirements demand security leadership.',
+  },
+]
+
 // Service-focused FAQs (for company/employer audience)
 export const CMO_SERVICE_FAQS: FAQItem[] = [
   {
