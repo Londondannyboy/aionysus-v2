@@ -1178,6 +1178,111 @@ function YourMainContent({ themeColor, lastQuery, setLastQuery }: {
     },
   });
 
+  // Human-in-the-Loop: Connect with Coach (for Trinity = coaching)
+  // Routes to Dan first for qualification, then to appropriate coach
+  useHumanInTheLoop({
+    name: "connect_with_coach",
+    description: "Connect user with career coaching - routes to Dan for initial qualification",
+    parameters: [
+      { name: "user_id", type: "string", description: "User ID", required: true },
+      { name: "context", type: "string", description: "Brief context about what they're looking for", required: false },
+    ],
+    render: ({ args, respond, status, result }) => {
+      if (status === "executing" && respond) {
+        return (
+          <div className="p-5 bg-white rounded-xl shadow-xl border border-purple-200 max-w-md">
+            <div className="mb-4">
+              <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full">
+                🧭 CAREER COACHING
+              </span>
+            </div>
+
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              Let's find you the right guidance
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              I'd love to understand your situation better and connect you with the right support.
+            </p>
+
+            {/* Coach Card */}
+            <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-100 mb-4">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 bg-purple-200 rounded-full flex items-center justify-center text-purple-700 font-bold text-lg">
+                  DK
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">Dan Keegan</p>
+                  <p className="text-sm text-gray-600">Founder & Career Advisor</p>
+                  <p className="text-sm text-purple-600">Fractional Quest</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mt-3 italic">
+                "I help fractional executives find clarity on their next move"
+              </p>
+            </div>
+
+            {args.context && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">Your focus:</p>
+                <p className="text-sm text-gray-700">{args.context}</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <a
+                href="https://calendly.com/fractional-quest/intro"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  respond({ booked: true, method: 'calendly' });
+                }}
+                className="block w-full text-center px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+              >
+                📅 Book a 30-min Intro Call
+              </a>
+              <a
+                href="mailto:dan@fractional.quest?subject=Coaching Inquiry&body=Hi Dan,%0D%0A%0D%0AI'm exploring career coaching options.%0D%0A%0D%0ABest regards"
+                onClick={() => {
+                  respond({ booked: true, method: 'email' });
+                }}
+                className="block w-full text-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+              >
+                📧 Send an Email Instead
+              </a>
+              <button
+                onClick={() => respond({ booked: false })}
+                className="w-full text-center px-4 py-2 text-gray-500 hover:text-gray-700 text-sm transition-colors"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      if (status === "complete" && result) {
+        if (result.booked) {
+          return (
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-sm text-purple-800">
+                {result.method === 'calendly'
+                  ? "📅 Great! Looking forward to our conversation."
+                  : "📧 Email sent! I'll get back to you soon."}
+              </p>
+            </div>
+          );
+        }
+        return (
+          <div className="p-2 text-sm text-gray-600 bg-gray-50 rounded-lg">
+            No problem - I'm here whenever you're ready.
+          </div>
+        );
+      }
+
+      return <></>;
+    },
+  });
+
   // Fetch profile items for instructions AND graph
   const [profileItems, setProfileItems] = useState<{location?: string; role?: string; skills?: string[]; companies?: string[]; trinity?: string; trinityLabel?: string; employmentStatus?: string; vertical?: string}>({});
   const [fullProfileItems, setFullProfileItems] = useState<Array<{id: number; item_type: string; value: string; metadata: Record<string, unknown>; confirmed: boolean}>>([]);
