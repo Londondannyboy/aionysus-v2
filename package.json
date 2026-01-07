@@ -1,6 +1,7 @@
 {
-  "name": "pydantic-ai-starter",
+  "name": "aionysus-v2",
   "version": "0.1.0",
+  "description": "AI Wine Sommelier Platform - DIONYSUS",
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run dev:ui\" \"npm run dev:agent\" --names ui,agent --prefix-colors blue,green --kill-others",
