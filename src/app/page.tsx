@@ -854,24 +854,34 @@ Reference the page context when discussing jobs.`;
                   </button>
                 </SignedOut>
                 <SignedIn>
-                  {/* Wrapper for UserButton visibility on dark background */}
-                  <div className="bg-white rounded-full p-0.5">
-                    <UserButton />
+                  {/* Compact profile: small avatar + name + actions */}
+                  <div className="flex items-center gap-2">
+                    {/* Small avatar with white border */}
+                    <div className="w-8 h-8 rounded-full bg-white p-0.5 shrink-0">
+                      <UserButton />
+                    </div>
+                    <span className="text-white text-sm font-medium">{firstName || user?.name}</span>
                   </div>
-                  <span className="text-white font-medium">{firstName || user?.name}</span>
+                  <span className="text-gray-500">|</span>
                   <button
                     onClick={() => appendMessage(new TextMessage({ content: "Read my messages", role: Role.User }))}
-                    className="relative text-gray-400 hover:text-white p-1.5 rounded transition-colors"
+                    className="relative text-gray-300 hover:text-white p-1 rounded transition-colors"
                     title="Messages"
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                     </svg>
                     <MessagesBadge userId={user?.id} />
                   </button>
-                  <a href="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors">
+                  <a href="/dashboard" className="text-gray-300 hover:text-white text-xs transition-colors">
                     Dashboard
                   </a>
+                  <button
+                    onClick={() => authClient.signOut()}
+                    className="text-gray-300 hover:text-white text-xs transition-colors"
+                  >
+                    Sign Out
+                  </button>
                 </SignedIn>
               </>
             )}
