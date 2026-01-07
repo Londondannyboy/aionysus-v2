@@ -117,6 +117,221 @@ Step 11: Configure Hume to use your CLM
 
 ---
 
+## CRITICAL: Passing User Context to Pydantic AI Agent
+
+**This is vital knowledge.** CopilotKit's `useCoAgent` state sync (`state.user`) often doesn't work reliably - the agent may see `user: None` even when the frontend has a logged-in user. Here's the bulletproof pattern we discovered:
+
+### The Problem
+
+When using CopilotKit with a Pydantic AI agent:
+- Frontend has `user` object from auth (Neon Auth, Stack Auth, etc.)
+- Agent `ctx.deps.state.user` is often `None` or missing fields
+- Result: "I don't know who you are" when user asks about their profile
+
+### The Solution: Instructions Prop + Middleware
+
+**Step 1: Fetch user profile data on frontend**
+
+```typescript
+// page.tsx
+const [profileItems, setProfileItems] = useState<{
+  location?: string;
+  role?: string;
+  skills?: string[];
+  companies?: string[];
+}>({});
+
+useEffect(() => {
+  if (!user?.id) return;
+
+  fetch(`/api/user-profile?userId=${user.id}`)
+    .then(res => res.json())
+    .then(data => {
+      const items = data.items || [];
+      const grouped = {};
+      items.forEach((item) => {
+        if (item.item_type === 'location') grouped.location = item.value;
+        if (item.item_type === 'role_preference') grouped.role = item.value;
+        if (item.item_type === 'skill') {
+          if (!grouped.skills) grouped.skills = [];
+          grouped.skills.push(item.value);
+        }
+        if (item.item_type === 'company') {
+          if (!grouped.companies) grouped.companies = [];
+          grouped.companies.push(item.value);
+        }
+      });
+      setProfileItems(grouped);
+    });
+}, [user?.id]);
+```
+
+**Step 2: Build instructions string with ALL user context**
+
+```typescript
+const agentInstructions = user
+  ? `CRITICAL USER CONTEXT:
+- User Name: ${firstName || user.name}
+- User ID: ${user.id}
+- User Email: ${user.email}
+- Location: ${profileItems.location || 'Not set'}
+- Target Role: ${profileItems.role || 'Not set'}
+- Skills: ${profileItems.skills?.join(', ') || 'None saved'}
+- Companies: ${profileItems.companies?.join(', ') || 'None saved'}
+
+When the user asks about their profile, skills, companies, location, etc., use the above info.`
+  : undefined;
+```
+
+**Step 3: Pass to CopilotSidebar**
+
+```typescript
+<CopilotSidebar
+  instructions={agentInstructions}
+  // ...other props
+>
+```
+
+**Step 4: Add middleware to agent.py to extract user context**
+
+```python
+# agent/src/agent.py
+
+# Global cache for extracted user context
+_cached_user_context: dict = {}
+
+def extract_user_from_instructions(instructions: str) -> dict:
+    """Extract user info from CopilotKit instructions text."""
+    result = {"user_id": None, "name": None, "email": None}
+
+    if not instructions:
+        return result
+
+    import re
+    id_match = re.search(r'User ID:\s*([a-f0-9-]+)', instructions, re.IGNORECASE)
+    if id_match:
+        result["user_id"] = id_match.group(1)
+
+    name_match = re.search(r'User Name:\s*([^\n]+)', instructions, re.IGNORECASE)
+    if name_match:
+        result["name"] = name_match.group(1).strip()
+
+    email_match = re.search(r'User Email:\s*([^\n]+)', instructions, re.IGNORECASE)
+    if email_match:
+        result["email"] = email_match.group(1).strip()
+
+    if result["user_id"]:
+        global _cached_user_context
+        _cached_user_context = result
+
+    return result
+
+def get_effective_user_id(state_user) -> Optional[str]:
+    """Get user ID from state or cached instructions."""
+    if state_user and state_user.id:
+        return state_user.id
+    if _cached_user_context.get("user_id"):
+        return _cached_user_context["user_id"]
+    return None
+
+def get_effective_user_name(state_user) -> Optional[str]:
+    """Get user name from state or cached instructions."""
+    if state_user and (state_user.firstName or state_user.name):
+        return state_user.firstName or state_user.name
+    if _cached_user_context.get("name"):
+        return _cached_user_context["name"]
+    return None
+```
+
+**Step 5: Add HTTP middleware to extract before processing**
+
+```python
+from fastapi import Request
+
+@main_app.middleware("http")
+async def extract_user_middleware(request: Request, call_next):
+    """Extract user context from CopilotKit instructions before processing."""
+    if request.method == "POST":
+        try:
+            body_bytes = await request.body()
+            if body_bytes:
+                body = json.loads(body_bytes)
+                messages = body.get("messages", [])
+                for msg in messages:
+                    role = msg.get("role", "")
+                    content = msg.get("content", "")
+                    if role == "system" and "User ID:" in content:
+                        extracted = extract_user_from_instructions(content)
+                        if extracted.get("user_id"):
+                            print(f"🔐 Middleware extracted user: {extracted.get('name')}")
+
+                # Recreate request with body (since we consumed it)
+                async def receive():
+                    return {"type": "http.request", "body": body_bytes}
+                request = Request(request.scope, receive)
+        except Exception as e:
+            print(f"[Middleware] Error: {e}")
+
+    return await call_next(request)
+```
+
+**Step 6: Use get_effective_user_id() in all tools**
+
+```python
+@agent.tool
+async def show_user_graph(ctx: RunContext[StateDeps[AppState]]) -> dict:
+    user_id = get_effective_user_id(ctx.deps.state.user)
+    user_name = get_effective_user_name(ctx.deps.state.user) or "You"
+
+    if not user_id:
+        return {"error": "Not logged in"}
+
+    # Now you have reliable user_id for database queries
+    ...
+```
+
+### Why This Works
+
+1. **Frontend is source of truth** for auth - it has the logged-in user
+2. **Instructions prop** is reliably passed as system message to agent
+3. **Middleware intercepts** before AG-UI processing, caches user context
+4. **Helper functions** provide fallback chain: state.user → cached instructions
+5. **All tools** use helpers instead of direct state.user access
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/app/page.tsx` | Fetches profile, builds instructions, passes to CopilotSidebar |
+| `agent/src/agent.py` | Middleware + helper functions + tools using helpers |
+| `src/app/api/user-profile/route.ts` | API to fetch user profile items from Neon |
+
+### Database Schema for Profile Items
+
+```sql
+CREATE TABLE user_profile_items (
+  id SERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  item_type TEXT NOT NULL,  -- 'location', 'role_preference', 'company', 'skill'
+  value TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  confirmed BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, item_type, value)
+);
+```
+
+### Common Pitfalls
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Agent says "I don't know who you are" | Relying on state.user which is null | Use instructions prop + middleware |
+| Profile data outdated after update | Instructions not refreshed | Add refresh trigger: `[user?.id, profileRefreshTrigger]` |
+| Different data in graph vs profile panel | Graph reading from Zep, panel from Neon | Both should read from Neon |
+
+---
+
 ## References Used
 
 ### Primary Documentation
