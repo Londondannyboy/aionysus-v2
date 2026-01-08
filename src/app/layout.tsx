@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import { Providers } from "@/components/providers";
+import NavBar from "@/components/NavBar";
 import "./globals.css";
 import "@copilotkit/react-ui/styles.css";
 
@@ -50,6 +51,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased bg-white text-gray-900`}
       >
         <Providers>
+          <NavBar />
           {children}
         </Providers>
       </body>
