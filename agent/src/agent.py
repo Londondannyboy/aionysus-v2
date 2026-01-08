@@ -237,14 +237,31 @@ You help users discover fine wines, understand investment potential, and find pe
 - Help both beginners and connoisseurs
 
 ## Available Tools:
+
+### Discovery & Search:
 - search_wines: Find wines by region, type, price, grape
 - get_wine_details: Get full details for a specific wine
 - show_wine_regions: Display wine distribution by region
 - show_wine_types: Show wine type distribution
-- show_investment_chart: Display price trends for investment wines
+
+### Investment Tools (USE THESE FOR HNW CLIENTS):
+- get_investment_wines: Get top investment-grade wines with scores
+- show_investment_chart: Display price trends with real historical data
+- calculate_wine_roi: Calculate ROI including storage costs (bonded vs private)
+- build_portfolio: Create diversified wine investment portfolio
+- show_wine_market: Market overview dashboard
+
+### Lifestyle:
 - get_food_pairings: Suggest food pairings for wines
 - add_to_cart: Add wine to shopping cart
 - save_wine_preference: Remember user preferences
+
+## Investment Expertise:
+- Investment-grade wines have scores from 1-10
+- 5-year return data available for all wines
+- Storage types: 'bonded' (duty-free, lower cost) vs 'private_cellar'
+- Liv-ex scores for premium wines (70-100 scale)
+- When discussing investment, ALWAYS show charts and ROI calculations
 
 ## CRITICAL: Dynamic Backgrounds
 When discussing a specific wine region, UPDATE THE SCENE to show that region!
@@ -521,39 +538,362 @@ async def show_wine_types(
 
 
 @agent.tool
+async def get_investment_wines(
+    ctx: RunContext[StateDeps[AppState]],
+    limit: int = 10,
+    min_score: float = 7.0,
+    region: Optional[str] = None,
+) -> dict:
+    """Get top investment-grade wines sorted by investment score.
+
+    Args:
+        limit: Number of wines to return (default 10)
+        min_score: Minimum investment score (1-10, default 7.0)
+        region: Optional region filter
+    """
+    if not DATABASE_URL:
+        return {"wines": [], "error": "Database not configured"}
+
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+
+        query = """
+            SELECT id, name, region, vintage, price_retail, investment_score,
+                   five_year_return, storage_type, liv_ex_score
+            FROM wines
+            WHERE is_investment_grade = true
+              AND investment_score >= %s
+        """
+        params = [min_score]
+
+        if region:
+            query += " AND LOWER(region) LIKE %s"
+            params.append(f"%{region.lower()}%")
+            ctx.deps.state.scene = AmbientScene(region=region.lower())
+
+        query += " ORDER BY investment_score DESC LIMIT %s"
+        params.append(limit)
+
+        cur.execute(query, params)
+        rows = cur.fetchall()
+
+        wines = []
+        for row in rows:
+            wines.append({
+                "id": row[0],
+                "name": row[1],
+                "region": row[2],
+                "vintage": row[3],
+                "price": float(row[4]) if row[4] else None,
+                "investmentScore": float(row[5]) if row[5] else None,
+                "fiveYearReturn": float(row[6]) if row[6] else None,
+                "storageType": row[7],
+                "livExScore": row[8],
+            })
+
+        cur.close()
+        conn.close()
+
+        return {
+            "wines": wines,
+            "count": len(wines),
+            "title": f"Top Investment Wines" + (f" from {region.title()}" if region else ""),
+        }
+    except Exception as e:
+        print(f"[Investment] Error: {e}", file=sys.stderr)
+        return {"wines": [], "error": str(e)}
+
+
+@agent.tool
 async def show_investment_chart(
     ctx: RunContext[StateDeps[AppState]],
+    wine_id: Optional[int] = None,
     wine_name: Optional[str] = None,
     region: Optional[str] = None,
 ) -> dict:
-    """Show price trends for investment wines.
+    """Show price trend chart for a specific wine or region.
 
-    Note: This returns sample data as price history requires external data source.
+    Args:
+        wine_id: Specific wine ID to show price history
+        wine_name: Search for wine by name
+        region: Show average trends for a region
     """
-    # For now, return sample investment data
-    # In production, this would query a wine price index API
+    if not DATABASE_URL:
+        return {"chartData": [], "error": "Database not configured"}
 
-    sample_data = [
-        {"year": "2019", "price": 150, "trend": 145},
-        {"year": "2020", "price": 165, "trend": 160},
-        {"year": "2021", "price": 180, "trend": 175},
-        {"year": "2022", "price": 195, "trend": 190},
-        {"year": "2023", "price": 220, "trend": 210},
-        {"year": "2024", "price": 250, "trend": 235},
-    ]
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
 
-    title = "Wine Investment Trends"
-    if wine_name:
-        title = f"{wine_name} Price Trend"
-    elif region:
-        title = f"{region.title()} Investment Trends"
-        ctx.deps.state.scene = AmbientScene(region=region.lower())
+        if wine_id:
+            cur.execute("""
+                SELECT name, region, price_history, investment_score, five_year_return
+                FROM wines WHERE id = %s
+            """, [wine_id])
+        elif wine_name:
+            cur.execute("""
+                SELECT name, region, price_history, investment_score, five_year_return
+                FROM wines WHERE LOWER(name) LIKE %s
+                LIMIT 1
+            """, [f"%{wine_name.lower()}%"])
+        elif region:
+            # Get average for region
+            cur.execute("""
+                SELECT 'Region Average' as name, %s as region,
+                       (SELECT price_history FROM wines
+                        WHERE is_investment_grade = true
+                        AND LOWER(region) LIKE %s
+                        ORDER BY investment_score DESC LIMIT 1),
+                       AVG(investment_score), AVG(five_year_return)
+                FROM wines
+                WHERE is_investment_grade = true AND LOWER(region) LIKE %s
+            """, [region.title(), f"%{region.lower()}%", f"%{region.lower()}%"])
+            ctx.deps.state.scene = AmbientScene(region=region.lower())
+        else:
+            # Get top investment wine
+            cur.execute("""
+                SELECT name, region, price_history, investment_score, five_year_return
+                FROM wines WHERE is_investment_grade = true
+                ORDER BY investment_score DESC LIMIT 1
+            """)
 
-    return {
-        "chartData": sample_data,
-        "title": title,
-        "subtitle": "Price per bottle (£) over time"
-    }
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not row:
+            return {"chartData": [], "error": "Wine not found"}
+
+        name, wine_region, price_history, inv_score, five_yr = row
+
+        # Parse price history JSON
+        import json
+        chart_data = json.loads(price_history) if price_history else []
+
+        if wine_region:
+            ctx.deps.state.scene = AmbientScene(region=wine_region.lower().split()[0])
+
+        return {
+            "chartData": chart_data,
+            "title": f"{name} Price Trend",
+            "subtitle": f"Investment Score: {inv_score}/10 | 5yr Return: {five_yr}%",
+            "wineName": name,
+            "region": wine_region,
+            "investmentScore": float(inv_score) if inv_score else None,
+            "fiveYearReturn": float(five_yr) if five_yr else None,
+        }
+    except Exception as e:
+        print(f"[Investment Chart] Error: {e}", file=sys.stderr)
+        return {"chartData": [], "error": str(e)}
+
+
+@agent.tool
+async def calculate_wine_roi(
+    ctx: RunContext[StateDeps[AppState]],
+    wine_id: Optional[int] = None,
+    wine_name: Optional[str] = None,
+    investment_amount: float = 1000,
+    holding_years: int = 5,
+    storage_type: str = "bonded",
+) -> dict:
+    """Calculate ROI for wine investment including storage costs.
+
+    Args:
+        wine_id: Specific wine ID
+        wine_name: Search wine by name
+        investment_amount: Amount to invest in GBP (default £1000)
+        holding_years: Years to hold (default 5)
+        storage_type: 'bonded' or 'private_cellar' (affects costs)
+    """
+    if not DATABASE_URL:
+        return {"error": "Database not configured"}
+
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+
+        if wine_id:
+            cur.execute("""
+                SELECT name, price_retail, investment_score, five_year_return, region
+                FROM wines WHERE id = %s
+            """, [wine_id])
+        else:
+            cur.execute("""
+                SELECT name, price_retail, investment_score, five_year_return, region
+                FROM wines WHERE LOWER(name) LIKE %s LIMIT 1
+            """, [f"%{wine_name.lower()}%"])
+
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not row:
+            return {"error": "Wine not found"}
+
+        name, price, inv_score, five_yr_return, region = row
+        price = float(price) if price else 100
+        annual_return = (float(five_yr_return) / 5) if five_yr_return else 8.0
+
+        # Storage costs per case per year
+        storage_costs = {
+            "bonded": 15,  # £15/case/year in bonded warehouse (duty-free)
+            "private_cellar": 8,  # £8/case/year self-storage
+        }
+
+        # Insurance (0.5% of value per year)
+        insurance_rate = 0.005
+
+        # Calculate bottles/cases
+        bottles = int(investment_amount / price)
+        cases = bottles / 12
+
+        # Calculate returns
+        projected_value = investment_amount * ((1 + annual_return / 100) ** holding_years)
+        gross_return = projected_value - investment_amount
+
+        # Calculate costs
+        storage_cost = storage_costs.get(storage_type, 15) * cases * holding_years
+        insurance_cost = investment_amount * insurance_rate * holding_years
+
+        # Duty (if not bonded) - approximately 25% of value
+        duty_cost = 0 if storage_type == "bonded" else investment_amount * 0.25
+
+        total_costs = storage_cost + insurance_cost + duty_cost
+        net_return = gross_return - total_costs
+        roi_percentage = (net_return / investment_amount) * 100
+
+        if region:
+            ctx.deps.state.scene = AmbientScene(region=region.lower().split()[0])
+
+        return {
+            "wine": name,
+            "investmentAmount": investment_amount,
+            "bottles": bottles,
+            "holdingYears": holding_years,
+            "storageType": storage_type,
+            "projectedValue": round(projected_value, 2),
+            "grossReturn": round(gross_return, 2),
+            "costs": {
+                "storage": round(storage_cost, 2),
+                "insurance": round(insurance_cost, 2),
+                "duty": round(duty_cost, 2),
+                "total": round(total_costs, 2),
+            },
+            "netReturn": round(net_return, 2),
+            "roiPercentage": round(roi_percentage, 1),
+            "annualizedReturn": round(annual_return, 1),
+        }
+    except Exception as e:
+        print(f"[ROI Calculator] Error: {e}", file=sys.stderr)
+        return {"error": str(e)}
+
+
+@agent.tool
+async def build_portfolio(
+    ctx: RunContext[StateDeps[AppState]],
+    budget: float = 10000,
+    risk_level: str = "medium",
+) -> dict:
+    """Build a diversified wine investment portfolio.
+
+    Args:
+        budget: Total investment budget in GBP (default £10,000)
+        risk_level: 'low', 'medium', or 'high' risk tolerance
+    """
+    if not DATABASE_URL:
+        return {"error": "Database not configured"}
+
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+
+        # Risk profiles
+        profiles = {
+            "low": {"min_score": 8.5, "regions": ["bordeaux", "burgundy"], "vintage_min": 2000},
+            "medium": {"min_score": 7.0, "regions": ["bordeaux", "burgundy", "champagne", "tuscany"], "vintage_min": 1990},
+            "high": {"min_score": 6.0, "regions": None, "vintage_min": 1980},
+        }
+
+        profile = profiles.get(risk_level, profiles["medium"])
+
+        query = """
+            SELECT id, name, region, vintage, price_retail, investment_score, five_year_return
+            FROM wines
+            WHERE is_investment_grade = true
+              AND investment_score >= %s
+              AND price_retail <= %s
+              AND vintage >= %s
+        """
+        params = [profile["min_score"], budget * 0.4, profile["vintage_min"]]
+
+        if profile["regions"]:
+            region_conditions = " OR ".join(["LOWER(region) LIKE %s" for _ in profile["regions"]])
+            query += f" AND ({region_conditions})"
+            params.extend([f"%{r}%" for r in profile["regions"]])
+
+        query += " ORDER BY investment_score DESC LIMIT 20"
+
+        cur.execute(query, params)
+        candidates = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # Diversify selection
+        portfolio = []
+        regions_included = set()
+        total_cost = 0
+
+        for row in candidates:
+            wine_id, name, region, vintage, price, score, five_yr = row
+            price = float(price) if price else 0
+
+            # Diversification: max 2 wines per region
+            region_key = (region or "unknown").lower()
+            if sum(1 for p in portfolio if p["region"].lower() == region_key) >= 2:
+                continue
+
+            if total_cost + price <= budget and len(portfolio) < 6:
+                portfolio.append({
+                    "id": wine_id,
+                    "name": name,
+                    "region": region,
+                    "vintage": vintage,
+                    "price": price,
+                    "investmentScore": float(score) if score else None,
+                    "fiveYearReturn": float(five_yr) if five_yr else None,
+                    "allocation": 0,  # Will calculate below
+                })
+                total_cost += price
+                regions_included.add(region_key)
+
+        # Calculate allocations
+        for wine in portfolio:
+            wine["allocation"] = round((wine["price"] / total_cost) * 100, 1) if total_cost > 0 else 0
+
+        # Calculate portfolio metrics
+        avg_score = sum(w["investmentScore"] or 0 for w in portfolio) / len(portfolio) if portfolio else 0
+        avg_return = sum(w["fiveYearReturn"] or 0 for w in portfolio) / len(portfolio) if portfolio else 0
+
+        return {
+            "portfolio": portfolio,
+            "totalCost": round(total_cost, 2),
+            "remainingBudget": round(budget - total_cost, 2),
+            "diversification": {
+                "wineCount": len(portfolio),
+                "regionCount": len(regions_included),
+                "regions": list(regions_included),
+            },
+            "metrics": {
+                "avgInvestmentScore": round(avg_score, 1),
+                "avgFiveYearReturn": round(avg_return, 1),
+                "riskLevel": risk_level,
+            },
+            "title": f"Wine Portfolio (£{budget:,.0f} - {risk_level.title()} Risk)",
+        }
+    except Exception as e:
+        print(f"[Portfolio Builder] Error: {e}", file=sys.stderr)
+        return {"error": str(e)}
 
 
 @agent.tool

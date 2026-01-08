@@ -1,9 +1,13 @@
 "use client";
 
 import {
-  WineRegionChart, WineTypeChart, WinePriceChart,
+  WineRegionChart, WineTypeChart,
   WineMarketDashboard, ChartLoading
 } from "@/components/charts";
+import {
+  InvestmentWinesGrid, InvestmentPriceChart, ROICalculator,
+  PortfolioBuilder, InvestmentLoading
+} from "@/components/investment";
 import { ForceGraph3DComponent, ForceGraphLoading } from "@/components/ForceGraph3D";
 import { VoiceInput } from "@/components/voice-input";
 import { DynamicBackground } from "@/components/DynamicBackground";
@@ -220,8 +224,16 @@ function WineContent({ lastQuery, setLastQuery }: {
   useRenderToolCall({
     name: "show_investment_chart",
     render: ({ result, status }) => {
-      if (status !== "complete" || !result) return <ChartLoading title="Loading price trends..." />;
-      return <WinePriceChart data={result.chartData || []} title={result.title} subtitle={result.subtitle} />;
+      if (status !== "complete" || !result) return <InvestmentLoading title="Loading price trends..." />;
+      return (
+        <InvestmentPriceChart
+          data={result.chartData || []}
+          title={result.title}
+          subtitle={result.subtitle}
+          investmentScore={result.investmentScore}
+          fiveYearReturn={result.fiveYearReturn}
+        />
+      );
     },
   }, []);
 
@@ -309,6 +321,44 @@ function WineContent({ lastQuery, setLastQuery }: {
     },
   }, []);
 
+  // === GENERATIVE UI: Investment Wines Grid ===
+  useRenderToolCall({
+    name: "get_investment_wines",
+    render: ({ result, status }) => {
+      if (status !== "complete" || !result) return <InvestmentLoading title="Finding investment wines..." />;
+      const wines = (result.wines || []).map((w: Record<string, unknown>) => ({
+        id: w.id as number,
+        name: w.name as string,
+        region: w.region as string,
+        vintage: w.vintage as number | undefined,
+        price: w.price as number | undefined,
+        investmentScore: w.investment_score as number | undefined,
+        fiveYearReturn: w.five_year_return as number | undefined,
+        storageType: w.storage_type as string | undefined,
+        livExScore: w.liv_ex_score as number | undefined,
+      }));
+      return <InvestmentWinesGrid wines={wines} title={result.title || "Investment Wines"} />;
+    },
+  }, []);
+
+  // === GENERATIVE UI: ROI Calculator ===
+  useRenderToolCall({
+    name: "calculate_wine_roi",
+    render: ({ result, status }) => {
+      if (status !== "complete" || !result) return <InvestmentLoading title="Calculating ROI..." />;
+      return <ROICalculator data={result} />;
+    },
+  }, []);
+
+  // === GENERATIVE UI: Portfolio Builder ===
+  useRenderToolCall({
+    name: "build_portfolio",
+    render: ({ result, status }) => {
+      if (status !== "complete" || !result) return <InvestmentLoading title="Building portfolio..." />;
+      return <PortfolioBuilder data={result} />;
+    },
+  }, []);
+
   // Build agent instructions
   const agentInstructions = user
     ? `CRITICAL USER CONTEXT:
@@ -323,6 +373,9 @@ Our database has 3,800+ wines from regions worldwide.
 When the user asks about wines, use the available tools:
 - search_wines: Find wines by region, type, price, grape variety
 - show_investment_chart: Show price trends for investment wines
+- get_investment_wines: Show top investment-grade wines
+- calculate_wine_roi: Calculate ROI for wine investments
+- build_portfolio: Build diversified wine investment portfolio
 - show_wine_regions: Display wines by region
 - show_wine_types: Show wine type distribution
 - get_food_pairings: Suggest food pairings
@@ -330,6 +383,7 @@ When the user asks about wines, use the available tools:
 - checkout: Process checkout via Shopify
 
 Be knowledgeable but approachable. Use wine terminology naturally.
+For investment queries, highlight scores, 5-year returns, and storage options.
 Remember user preferences via Zep memory.`
     : `You are DIONYSUS, an expert AI wine sommelier for Aionysus.
 Help users discover wines from our collection of 3,800+ bottles.

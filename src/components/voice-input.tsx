@@ -4,16 +4,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { VoiceProvider, useVoice } from "@humeai/voice-react";
 
 interface PageContext {
-  location?: string;
-  totalJobs?: number;
-  topRoles?: string[];
-  // Page type for context
-  pageType?: 'jobs' | 'services' | 'hiring_guide' | 'guide' | 'salary' | 'home';
-  roleType?: string;  // CMO, CTO, CFO, COO for role-specific pages
-  // Rich page context (for clarity)
-  pageH1?: string;      // The main H1 headline of the page
-  pageUrl?: string;     // The URL path e.g., "/hire-fractional-cmo"
-  pageDescription?: string;  // Brief description of what the page is about
+  // Wine region currently being discussed
+  region?: string;
+  wineType?: string;
+  // Scene for dynamic background
+  scene?: string;
 }
 
 interface VoiceButtonProps {
@@ -115,139 +110,90 @@ function VoiceButton({ onMessage, firstName, userId, pageContext }: VoiceButtonP
         const isQuickReconnect = timeSinceLastInteraction < 5 * 60 * 1000; // 5 minutes
         const wasGreeted = greetedThisSession.current;
 
-        // Build system prompt with STRONG anti-re-greeting logic
+        // Build system prompt for DIONYSUS wine sommelier
         let greetingInstruction = "";
         if (wasGreeted || isQuickReconnect) {
-          greetingInstruction = `⚠️ CRITICAL - DO NOT GREET:
-This user has ALREADY been greeted in this session.
-- DO NOT say "Hi ${firstName}", "Hello", "Hey there", or any greeting
-- DO NOT introduce yourself
-- DO NOT say "lovely to meet you" or "nice to meet you"
-- Simply continue the conversation naturally
-- If you must acknowledge them, just say "I'm here" or "What's next?"
-Previous greeting was ${Math.round(timeSinceLastInteraction / 1000)}s ago - they're the SAME person, same session.`;
+          greetingInstruction = `⚠️ DO NOT GREET - user already greeted this session.
+Continue the conversation naturally. If you must acknowledge, say "I'm here" or "What wine shall we explore?"`;
         } else {
           greetingInstruction = firstName
-            ? `This is the FIRST connection. Greet once: "Hi ${firstName}!" - but NEVER re-greet after this.`
-            : `This is the FIRST connection. Give a brief warm greeting - but NEVER re-greet after this.`;
+            ? `First connection - greet warmly: "Welcome ${firstName}! I'm DIONYSUS, your AI sommelier."`
+            : `First connection - give a warm welcome as DIONYSUS the wine sommelier.`;
         }
 
-        // Build page context section - different for jobs vs services pages
-        let pageContextSection = "";
-        if (pageContext?.pageType === 'services' && pageContext?.roleType) {
-          // SERVICES PAGE context - include H1 and description if available
-          const h1 = pageContext.pageH1 || `Hire a Fractional ${pageContext.roleType}`;
-          const url = pageContext.pageUrl || `/hire-fractional-${pageContext.roleType.toLowerCase()}`;
-          const desc = pageContext.pageDescription || `Strategic ${pageContext.roleType} leadership without the full-time commitment.`;
-
-          pageContextSection = `
-PAGE_CONTEXT: SERVICES PAGE
-=== CRITICAL: YOU MUST KNOW THIS PAGE ===
-Page URL: ${url}
-Page H1: "${h1}"
-Page Description: "${desc}"
-Page Type: Fractional ${pageContext.roleType} Services Page
-
-This is NOT a job listings page - it's our SERVICES/SALES page explaining:
-- What a Fractional ${pageContext.roleType} does
-- Our pricing tiers (Starter £3k, Growth £6k, Scale £9k per month)
-- How the engagement process works (Discovery → Proposal → Strategy → Partnership)
-
-Your role here is CONSULTATIVE:
-- Help them understand if Fractional ${pageContext.roleType} is right for their company
-- Explain pricing when asked
-- Answer questions about the process
-- Guide interested visitors toward booking a discovery call
-
-When they ask "what page is this" or "where am I", you MUST say:
-"We're on the ${h1} services page at ${url}."
-DO NOT say "main page" or "jobs page" - we are on ${h1}.
-`;
-        } else if (pageContext?.location) {
-          // JOBS PAGE context
-          pageContextSection = `
-PAGE_CONTEXT: JOBS PAGE
-User is viewing: ${pageContext.location.toUpperCase()} JOBS PAGE
-${pageContext.totalJobs ? `- Total jobs on page: ${pageContext.totalJobs}` : ''}
-${pageContext.topRoles?.length ? `- Top roles: ${pageContext.topRoles.join(', ')}` : ''}
-
-When the user says "jobs here", "these roles", "this area" - they mean ${pageContext.location}.
-When they ask to "show more" - search for more ${pageContext.location} jobs.
-Greet them mentioning ${pageContext.location}: "I see you're exploring ${pageContext.location} roles!"
+        // Build wine context section
+        let wineContextSection = "";
+        if (pageContext?.region) {
+          wineContextSection = `
+Currently discussing: ${pageContext.region} wines
+${pageContext.wineType ? `Wine type: ${pageContext.wineType}` : ''}
 `;
         }
 
         const systemPrompt = `## YOUR ROLE
-You are the VOICE INTERFACE for a fractional executive jobs platform.
-Your job is to have natural conversations and help users explore jobs.
+You are DIONYSUS, an expert AI wine sommelier for Aionysus - a premium wine investment and discovery platform.
+Your voice is warm, knowledgeable, and approachable. You help users discover exceptional wines.
 
 ## USER PROFILE
-${firstName ? `Name: ${firstName}` : 'Guest user'}
+${firstName ? `Name: ${firstName}` : 'Guest wine enthusiast'}
 ${zepContext ? `\n### What I Remember About ${firstName || 'You'}:\n${zepContext}\n` : '\n### No prior history - this is their first visit.\n'}
 
-${pageContextSection}
+${wineContextSection}
 
 ## GREETING RULES
 ${greetingInstruction}
 
-## CRITICAL CONTEXT AWARENESS
-${pageContext?.pageType === 'services' && pageContext?.roleType ? `
-🎯 USER IS ON THE "HIRE A FRACTIONAL ${pageContext.roleType.toUpperCase()}" SERVICES PAGE
-- This is NOT a job listings page - it's our services/sales page
-- Help them understand Fractional ${pageContext.roleType} value proposition
-- Be ready to explain pricing: Starter £3k, Growth £6k, Scale £9k per month
-- When asked "what page" say: "Hire a Fractional ${pageContext.roleType} services page"
-` : pageContext?.location ? `
-🎯 USER IS ON THE ${pageContext.location.toUpperCase()} JOBS PAGE
-- When they say "jobs here", "these roles", "what's available" → ${pageContext.location} jobs
-- Total jobs on this page: ${pageContext.totalJobs || 'checking...'}
-- Top roles: ${pageContext.topRoles?.join(', ') || 'various C-suite'}
-- Always mention "${pageContext.location}" when discussing jobs
-` : '- User is on the main page'}
+## YOUR EXPERTISE
+- Deep knowledge of wine regions: Bordeaux, Burgundy, Champagne, Tuscany, Piedmont, Rhône, Napa
+- Investment-grade wines: understanding of Liv-ex scores, price appreciation, bonded storage
+- Food pairings: classic and modern combinations
+- Wine terminology: terroir, tannins, appellations, classifications
+- Our database: 3,800+ wines from premium regions worldwide
+
+## PHONETIC CORRECTIONS (what you might hear → what they mean)
+- "bow jo lay" → Beaujolais
+- "shard oh nay" → Chardonnay
+- "pin oh noir" → Pinot Noir
+- "bor doh" → Bordeaux
+- "burr gun dee" → Burgundy
+- "shah toe" → Château
+- "doe main" → Domaine
 
 ## BEHAVIOR GUIDELINES
-1. Reference the PAGE CONTEXT above - they're on a specific location page!
-2. Reference their ZEP MEMORY if available - mention their past interests
-3. Be specific: "I see ${pageContext?.totalJobs || 'several'} roles here in ${pageContext?.location || 'the UK'}..."
-4. When they express interest ("I like CTO", "that looks good"), confirm and remember it
-5. Use emojis sparingly: 🔥 for hot roles, 💰 for salary, 📍 for location
-6. Keep responses SHORT for voice - 1-2 sentences max unless they ask for details
+1. Be knowledgeable but not pretentious - make wine accessible
+2. Reference their ZEP MEMORY if available - mention wines they've liked before
+3. For investment queries, mention scores, 5-year returns, storage options (bonded vs private cellar)
+4. Keep responses SHORT for voice - 1-2 sentences unless they ask for details
+5. Use wine emoji sparingly: 🍷 🍇 🥂
+6. Suggest tools when relevant: "Would you like me to show you investment wines?" or "Shall I calculate ROI on that?"
 
-## ONBOARDING (if no Zep memory)
-If this is their first visit, gently ask about:
-- What role type interests them? (CTO, CFO, CMO, etc.)
-- Preferred location? (London, Remote, etc.)
-- Experience level?
-Then confirm: "So you're interested in [role] in [location] - I'll remember that!"
+## TOOLS YOU CAN SUGGEST
+- search_wines: Find wines by region, type, price, grape variety
+- get_investment_wines: Show top investment-grade wines with scores
+- show_investment_chart: Display price trends over time
+- calculate_wine_roi: Calculate return on investment including storage costs
+- build_portfolio: Build a diversified wine investment portfolio
+- get_food_pairings: Suggest food pairings for wines
 `;
 
         // Use stable session ID based on user ID
         const stableSessionId = userId
-          ? `fractional_${userId}`
-          : `fractional_anon_${Math.random().toString(36).slice(2, 10)}`;
-
-        // Include page context in session ID for CLM (format: "firstName|sessionId|location:X,jobs:Y" or "firstName|sessionId|services:CMO")
-        let pageContextPart = '';
-        if (pageContext?.pageType === 'services' && pageContext?.roleType) {
-          // Services page: pass role type
-          pageContextPart = `|services:${pageContext.roleType}`;
-        } else if (pageContext?.location) {
-          // Jobs page: pass location and job count
-          const parts = [`location:${pageContext.location}`];
-          if (pageContext.totalJobs) parts.push(`jobs:${pageContext.totalJobs}`);
-          pageContextPart = `|${parts.join(',')}`;
-        }
+          ? `aionysus_${userId}`
+          : `aionysus_anon_${Math.random().toString(36).slice(2, 10)}`;
 
         const customSessionId = firstName
-          ? `${firstName}|${stableSessionId}${pageContextPart}`
-          : `|${stableSessionId}${pageContextPart}`;
+          ? `${firstName}|${stableSessionId}`
+          : `|${stableSessionId}`;
 
-        console.log("🎤 Got token, connecting with configId and user context:", firstName || 'anonymous');
-        console.log("🎤 Session ID:", customSessionId);
-        console.log("🎤 Quick reconnect?", isQuickReconnect, "Was greeted?", wasGreeted);
+        // Get config ID from environment or use default
+        const configId = process.env.NEXT_PUBLIC_HUME_CONFIG_ID || "29cec14d-5272-4a79-820d-382dc0d0e801";
+
+        console.log("🍷 Got token, connecting DIONYSUS with user:", firstName || 'anonymous');
+        console.log("🍷 Session ID:", customSessionId);
+        console.log("🍷 Config ID:", configId);
         await connect({
           auth: { type: "accessToken", value: accessToken },
-          configId: "acb5575c-e22f-44c0-a9c8-b03305d1ea92",
+          configId: configId,
           sessionSettings: {
             type: "session_settings",
             systemPrompt: systemPrompt,
