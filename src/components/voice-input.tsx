@@ -227,45 +227,141 @@ ${greetingInstruction}
 
   const isConnected = status.value === "connected";
 
+  // Wine glass button - larger, centered, throbbing
   return (
     <button
       onClick={handleToggle}
       disabled={isPending}
-      className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg ${
-        isConnected
-          ? "bg-red-500 hover:bg-red-600 animate-pulse"
-          : isPending
-          ? "bg-gray-400 cursor-not-allowed"
-          : "bg-indigo-600 hover:bg-indigo-700"
+      className={`relative w-20 h-20 flex items-center justify-center transition-all ${
+        isPending ? "cursor-not-allowed opacity-60" : "cursor-pointer"
       }`}
-      title={isConnected ? "Stop listening" : "Start voice input"}
+      title={isConnected ? "Stop listening" : "Talk to DIONYSUS"}
+      style={{
+        filter: isConnected ? "drop-shadow(0 0 20px rgba(114, 47, 55, 0.8))" : "drop-shadow(0 4px 12px rgba(0,0,0,0.3))",
+      }}
     >
-      {isPending ? (
-        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-      ) : (
-        <svg
-          className="w-6 h-6 text-white"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          {isConnected ? (
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z M9 10h6v4H9z"
-            />
-          ) : (
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-            />
-          )}
-        </svg>
+      {/* Wine Glass SVG */}
+      <svg
+        viewBox="0 0 64 64"
+        className={`w-full h-full transition-transform ${
+          isConnected ? "scale-110" : "hover:scale-105"
+        }`}
+        style={{
+          animation: isConnected ? "wine-pulse 1.5s ease-in-out infinite" : "wine-throb 3s ease-in-out infinite",
+        }}
+      >
+        {/* Glass bowl */}
+        <ellipse
+          cx="32"
+          cy="22"
+          rx="18"
+          ry="16"
+          fill={isPending ? "#9ca3af" : "#722F37"}
+          className="transition-colors duration-300"
+        />
+        {/* Wine liquid with wave effect */}
+        <ellipse
+          cx="32"
+          cy="24"
+          rx="14"
+          ry="10"
+          fill={isPending ? "#6b7280" : isConnected ? "#8B0000" : "#4A1C40"}
+          className="transition-colors duration-300"
+          style={{
+            animation: isConnected ? "wine-wave 2s ease-in-out infinite" : "none",
+          }}
+        />
+        {/* Glass highlight */}
+        <ellipse
+          cx="26"
+          cy="18"
+          rx="4"
+          ry="3"
+          fill="rgba(255,255,255,0.3)"
+        />
+        {/* Stem */}
+        <rect
+          x="30"
+          y="36"
+          width="4"
+          height="16"
+          fill={isPending ? "#9ca3af" : "#722F37"}
+          className="transition-colors duration-300"
+        />
+        {/* Base */}
+        <ellipse
+          cx="32"
+          cy="54"
+          rx="10"
+          ry="4"
+          fill={isPending ? "#9ca3af" : "#722F37"}
+          className="transition-colors duration-300"
+        />
+        {/* Microphone icon when not connected */}
+        {!isConnected && !isPending && (
+          <g fill="white" opacity="0.9">
+            <rect x="29" y="18" width="6" height="10" rx="3" />
+            <path d="M26 24 v2 a6 6 0 0 0 12 0 v-2" stroke="white" strokeWidth="1.5" fill="none" />
+            <line x1="32" y1="32" x2="32" y2="34" stroke="white" strokeWidth="1.5" />
+          </g>
+        )}
+        {/* Stop icon when connected */}
+        {isConnected && (
+          <rect x="28" y="20" width="8" height="8" rx="1" fill="white" opacity="0.9" />
+        )}
+        {/* Loading spinner */}
+        {isPending && (
+          <circle
+            cx="32"
+            cy="24"
+            r="6"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeDasharray="20 10"
+            style={{ animation: "spin 1s linear infinite" }}
+          />
+        )}
+      </svg>
+
+      {/* Pulse rings when connected */}
+      {isConnected && (
+        <>
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: "radial-gradient(circle, rgba(114,47,55,0.4) 0%, transparent 70%)",
+              animation: "ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite",
+            }}
+          />
+        </>
       )}
+
+      {/* CSS Animations */}
+      <style jsx>{`
+        @keyframes wine-throb {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+        @keyframes wine-pulse {
+          0%, 100% { transform: scale(1.1); }
+          50% { transform: scale(1.15); }
+        }
+        @keyframes wine-wave {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes ping {
+          75%, 100% {
+            transform: scale(1.5);
+            opacity: 0;
+          }
+        }
+      `}</style>
     </button>
   );
 }
