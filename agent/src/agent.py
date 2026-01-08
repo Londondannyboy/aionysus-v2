@@ -213,7 +213,7 @@ from pydantic_ai.models.groq import GroqModel
 
 model = GroqModel(
     model_name="llama-3.3-70b-versatile",
-    api_key=GROQ_API_KEY,
+    # Uses GROQ_API_KEY env var automatically
 )
 
 
@@ -723,9 +723,9 @@ async def extract_user_middleware(request: Request, call_next):
 
     return await call_next(request)
 
-# AG-UI endpoint
+# AG-UI endpoint (CopilotKit expects /agui/)
 ag_ui_app = agent.to_ag_ui(deps=StateDeps(AppState()))
-main_app.mount("/", ag_ui_app)
+main_app.mount("/agui", ag_ui_app)
 
 # Health check
 @main_app.get("/health")
