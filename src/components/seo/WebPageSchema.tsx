@@ -5,7 +5,7 @@
  * Google uses this to determine the date shown in search snippets.
  *
  * Usage:
- * - Job listing pages: pass mostRecentDate from latest job's posted_date
+ * - Wine listing pages: pass mostRecentDate from latest wine's updated date
  * - Article pages: pass the article's updated_at or published_at
  * - Static pages: pass a fixed date or omit for current date
  */
@@ -37,8 +37,8 @@ export function WebPageSchema({
     'dateModified': dateModified.toISOString(),
     'publisher': {
       '@type': 'Organization',
-      'name': 'Fractional Quest',
-      'url': 'https://fractional.quest'
+      'name': 'Aionysus',
+      'url': 'https://aionysus.wine'
     },
     ...(itemCount && {
       'mainEntity': {

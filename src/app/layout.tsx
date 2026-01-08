@@ -4,7 +4,7 @@ import { Providers } from "@/components/providers";
 import "./globals.css";
 import "@copilotkit/react-ui/styles.css";
 
-// Font configuration - matches fractional.quest design system
+// Font configuration for Aionysus wine platform
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -28,10 +28,10 @@ const playfair = Playfair_Display({
 
 export const metadata: Metadata = {
   title: {
-    default: "Fractional Jobs | Fractional Quest",
-    template: "%s | Fractional Quest"
+    default: "Aionysus | AI Wine Sommelier",
+    template: "%s | Aionysus"
   },
-  description: "AI-powered fractional job search platform. Find executive roles paying $1,200-$2,500/day.",
+  description: "AI-powered wine discovery platform. Expert recommendations, investment insights, and seamless shopping with DIONYSUS, your personal sommelier.",
 };
 
 export default function RootLayout({

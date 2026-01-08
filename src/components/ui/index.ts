@@ -2,4 +2,3 @@
 export { Section } from "./Section";
 export { SectionHeading } from "./SectionHeading";
 export { StatsBar } from "./StatsBar";
-export { JobCard } from "./JobCard";
