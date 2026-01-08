@@ -11,7 +11,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       redirectTo="/"
       social={{ providers: ['google'] }}
     >
-      <CopilotKit runtimeUrl="/api/copilotkit" agent="my_agent">
+      <CopilotKit runtimeUrl="/api/copilotkit" agent="wine_agent">
         {children}
       </CopilotKit>
     </NeonAuthUIProvider>

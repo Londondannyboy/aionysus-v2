@@ -12,10 +12,11 @@ const serviceAdapter = new ExperimentalEmptyAdapter();
 
 // 2. Create the CopilotRuntime instance and utilize the PydanticAI AG-UI
 //    integration to setup the connection.
+const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:8000";
 const runtime = new CopilotRuntime({
   agents: {
-    // Our FastAPI endpoint URL
-    my_agent: new HttpAgent({ url: "https://copilotkit-agent-production.up.railway.app/agui/" }),
+    // DIONYSUS wine agent on Railway
+    wine_agent: new HttpAgent({ url: `${agentUrl}/agui/` }),
   },
 });
 
