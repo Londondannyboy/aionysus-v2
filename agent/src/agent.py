@@ -1025,11 +1025,16 @@ async def show_wine_market(
 
 
 # =====
-# FastAPI App with AG-UI
+# FastAPI App with AG-UI + OpenAI-compatible endpoint for Hume CLM
 # =====
 from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic_ai.models.groq import GroqModel
 import json
+import asyncio
+import uuid
+import time
 
 main_app = FastAPI(title="DIONYSUS Wine Agent")
 
@@ -1066,6 +1071,158 @@ async def extract_user_middleware(request: Request, call_next):
 # AG-UI endpoint (CopilotKit expects /agui/)
 ag_ui_app = agent.to_ag_ui(deps=StateDeps(AppState()))
 main_app.mount("/agui", ag_ui_app)
+
+
+# =====
+# OpenAI-compatible /chat/completions endpoint for Hume CLM
+# =====
+@main_app.post("/chat/completions")
+async def chat_completions(request: Request):
+    """OpenAI-compatible chat completions endpoint for Hume CLM integration."""
+    try:
+        body = await request.json()
+        messages = body.get("messages", [])
+        stream = body.get("stream", True)
+
+        # Extract conversation from messages
+        conversation = []
+        system_prompt = None
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role == "system":
+                system_prompt = content
+            else:
+                conversation.append({"role": role, "content": content})
+
+        # Get the last user message
+        user_message = ""
+        for msg in reversed(conversation):
+            if msg["role"] == "user":
+                user_message = msg["content"]
+                break
+
+        if not user_message:
+            user_message = "Hello"
+
+        # Apply phonetic corrections
+        user_message = apply_phonetic_corrections(user_message)
+
+        # Create a simple agent for Hume (without tools - just chat)
+        hume_agent = Agent(
+            model=GroqModel("llama-3.3-70b-versatile"),
+            system_prompt=dedent(f"""
+                You are DIONYSUS, an expert AI wine sommelier for Aionysus.
+                You have deep knowledge of wines, regions, investments, and pairings.
+                Keep responses concise for voice - 1-2 sentences unless asked for details.
+                Be warm, knowledgeable, and approachable.
+
+                {system_prompt or ''}
+            """).strip(),
+        )
+
+        if stream:
+            # Streaming response for Hume
+            async def generate():
+                response_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
+                created = int(time.time())
+
+                try:
+                    # Run the agent
+                    result = await hume_agent.run(user_message)
+                    response_text = result.data if hasattr(result, 'data') else str(result)
+
+                    # Stream the response in chunks
+                    words = response_text.split()
+                    for i, word in enumerate(words):
+                        chunk = {
+                            "id": response_id,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": "dionysus-1",
+                            "choices": [{
+                                "index": 0,
+                                "delta": {"content": word + (" " if i < len(words) - 1 else "")},
+                                "finish_reason": None
+                            }]
+                        }
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                        await asyncio.sleep(0.02)  # Small delay for streaming effect
+
+                    # Send finish
+                    finish_chunk = {
+                        "id": response_id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": "dionysus-1",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": "stop"
+                        }]
+                    }
+                    yield f"data: {json.dumps(finish_chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                except Exception as e:
+                    error_chunk = {
+                        "id": response_id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": "dionysus-1",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": f"I apologize, I encountered an issue. Please try again."},
+                            "finish_reason": "stop"
+                        }]
+                    }
+                    yield f"data: {json.dumps(error_chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+                    print(f"[Hume CLM Error] {e}", file=sys.stderr)
+
+            return StreamingResponse(
+                generate(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                }
+            )
+        else:
+            # Non-streaming response
+            result = await hume_agent.run(user_message)
+            response_text = result.data if hasattr(result, 'data') else str(result)
+
+            return {
+                "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": "dionysus-1",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": response_text
+                    },
+                    "finish_reason": "stop"
+                }],
+                "usage": {
+                    "prompt_tokens": len(user_message.split()),
+                    "completion_tokens": len(response_text.split()),
+                    "total_tokens": len(user_message.split()) + len(response_text.split())
+                }
+            }
+
+    except Exception as e:
+        print(f"[Hume CLM Error] {e}", file=sys.stderr)
+        return {
+            "error": {
+                "message": str(e),
+                "type": "server_error",
+                "code": 500
+            }
+        }
+
 
 # Health check
 @main_app.get("/health")
