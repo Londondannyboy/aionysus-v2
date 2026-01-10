@@ -1216,6 +1216,14 @@ async def chat_completions(request: Request):
         messages = body.get("messages", [])
         stream = body.get("stream", True)
 
+        # DEBUG: Log what Hume sends us
+        print(f"🎤 Hume CLM request received:", file=sys.stderr)
+        print(f"   Messages count: {len(messages)}", file=sys.stderr)
+        for i, msg in enumerate(messages):
+            role = msg.get("role", "?")
+            content = msg.get("content", "")[:200]  # First 200 chars
+            print(f"   [{i}] {role}: {content}...", file=sys.stderr)
+
         # Extract conversation from messages
         conversation = []
         system_prompt = None
@@ -1224,6 +1232,7 @@ async def chat_completions(request: Request):
             content = msg.get("content", "")
             if role == "system":
                 system_prompt = content
+                print(f"🎤 Found system prompt ({len(content)} chars), contains 'Name:': {'Name:' in content}", file=sys.stderr)
             else:
                 conversation.append({"role": role, "content": content})
 
