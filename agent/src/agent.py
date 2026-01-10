@@ -1160,25 +1160,50 @@ main_app.mount("/agui", ag_ui_app)
 # =====
 # OpenAI-compatible /chat/completions endpoint for Hume CLM
 # =====
-def extract_user_from_hume_prompt(system_prompt: str) -> dict:
-    """Extract user info from Hume's system prompt."""
+def extract_user_from_hume_messages(messages: list, system_prompt: str = "") -> dict:
+    """Extract user info from Hume's messages and system prompt."""
     result = {"name": None, "user_id": None}
-    if not system_prompt:
-        return result
 
-    # Look for "Name: X" pattern
-    name_match = re.search(r'Name:\s*([^\n]+)', system_prompt)
-    if name_match:
-        name = name_match.group(1).strip()
-        if name and name.lower() != 'guest wine enthusiast':
-            result["name"] = name
+    # First check system prompt
+    if system_prompt:
+        # Look for "Name: X" pattern
+        name_match = re.search(r'Name:\s*([^\n]+)', system_prompt)
+        if name_match:
+            name = name_match.group(1).strip()
+            if name and name.lower() != 'guest wine enthusiast':
+                result["name"] = name
 
-    # Look for session ID with user name: "name|aionysus_userid"
-    session_match = re.search(r'([^|]+)\|aionysus_([a-f0-9-]+)', system_prompt)
-    if session_match:
-        if session_match.group(1).strip():
-            result["name"] = session_match.group(1).strip()
-        result["user_id"] = session_match.group(2)
+        # Look for session ID with user name: "name|aionysus_userid"
+        session_match = re.search(r'([^|]+)\|aionysus_([a-f0-9-]+)', system_prompt)
+        if session_match:
+            if session_match.group(1).strip():
+                result["name"] = session_match.group(1).strip()
+            result["user_id"] = session_match.group(2)
+
+    # Also scan user messages for "my name is X" or "I'm X" patterns
+    if not result["name"]:
+        for msg in messages:
+            if msg.get("role") == "user":
+                content = msg.get("content", "").lower()
+                # Pattern: "my name is Dan" or "I'm Dan" or "Hello, my name is Dan"
+                name_patterns = [
+                    r"my name is\s+([a-zA-Z]+)",
+                    r"i'm\s+([a-zA-Z]+)",
+                    r"i am\s+([a-zA-Z]+)",
+                    r"call me\s+([a-zA-Z]+)",
+                    r"this is\s+([a-zA-Z]+)",
+                ]
+                for pattern in name_patterns:
+                    match = re.search(pattern, content, re.IGNORECASE)
+                    if match:
+                        potential_name = match.group(1).strip().title()
+                        # Filter out common non-name words
+                        if potential_name.lower() not in ['here', 'there', 'interested', 'looking', 'wondering', 'asking']:
+                            result["name"] = potential_name
+                            print(f"🎤 Found name in user message: {potential_name}", file=sys.stderr)
+                            break
+                if result["name"]:
+                    break
 
     return result
 
@@ -1202,8 +1227,8 @@ async def chat_completions(request: Request):
             else:
                 conversation.append({"role": role, "content": content})
 
-        # Extract user context from Hume's system prompt
-        user_context = extract_user_from_hume_prompt(system_prompt or "")
+        # Extract user context from Hume's system prompt AND user messages
+        user_context = extract_user_from_hume_messages(messages, system_prompt or "")
         user_name = user_context.get("name")
         user_id = user_context.get("user_id")
 
