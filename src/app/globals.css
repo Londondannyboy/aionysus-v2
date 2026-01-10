@@ -372,3 +372,74 @@ h3, h4, h5, h6 {
 .copilotKitSidebarContentWrapper > div:last-child:has(a[href*="copilotkit"]) {
   display: none !important;
 }
+
+/* ===========================================
+   COPILOTKIT SIDEBAR - Close Button Enhancement
+   Make the close/toggle button more visible
+   =========================================== */
+
+/* Add a visible close button to the sidebar header */
+[class*="copilotKit"] [class*="Header"],
+[class*="copilotKitHeader"] {
+  position: relative;
+}
+
+/* Style the existing close/toggle button to be more visible */
+[class*="copilotKit"] button[aria-label*="close"],
+[class*="copilotKit"] button[aria-label*="Close"],
+[class*="copilotKit"] button[aria-label*="toggle"],
+[class*="copilotKit"] button[aria-label*="Toggle"] {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+[class*="copilotKit"] button[aria-label*="close"]:hover,
+[class*="copilotKit"] button[aria-label*="Close"]:hover,
+[class*="copilotKit"] button[aria-label*="toggle"]:hover,
+[class*="copilotKit"] button[aria-label*="Toggle"]:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  transform: scale(1.05);
+}
+
+/* Make the sidebar toggle button on the edge more visible */
+[class*="copilotKitSidebar"] > button,
+[class*="CopilotSidebar"] > button {
+  background: #722F37 !important;
+  border: 2px solid white !important;
+  border-radius: 50% !important;
+  width: 44px !important;
+  height: 44px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+[class*="copilotKitSidebar"] > button:hover,
+[class*="CopilotSidebar"] > button:hover {
+  background: #8B3A45 !important;
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Add X icon styling when sidebar is open */
+[class*="copilotKitSidebar"][data-state="open"] > button::before,
+[class*="CopilotSidebar"][data-state="open"] > button::before {
+  content: "×";
+  font-size: 24px;
+  font-weight: bold;
+  color: white;
+}
+
+/* Sidebar header - add close button if not present */
+[class*="copilotKitSidebar"] [class*="Header"]::after {
+  content: "Click edge button or press Esc to close";
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}

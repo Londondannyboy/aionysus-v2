@@ -16,8 +16,8 @@ import { useCoAgent, useRenderToolCall, useCopilotChat } from "@copilotkit/react
 import { CopilotKitCSSProperties, CopilotSidebar } from "@copilotkit/react-ui";
 import { Role, TextMessage } from "@copilotkit/runtime-client-gql";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { UserButton, SignedIn, SignedOut } from "@neondatabase/neon-js/auth/react/ui";
 import { authClient } from "@/lib/auth/client";
+import { UserMenu } from "@/components/UserMenu";
 
 // Wine Card Component for search results
 function WineCard({ wine, onAddToCart }: { wine: Wine; onAddToCart?: (wine: Wine) => void }) {
@@ -415,21 +415,15 @@ Encourage sign-in for personalized recommendations and purchase.`;
           <div className="flex items-center gap-4">
             {isSessionLoading ? (
               <div className="text-white/60 text-sm">...</div>
+            ) : user ? (
+              <UserMenu user={{ id: user.id, name: user.name, email: user.email, image: user.image }} />
             ) : (
-              <>
-                <SignedOut>
-                  <button
-                    onClick={() => window.location.href = '/auth/sign-in'}
-                    className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Sign In
-                  </button>
-                </SignedOut>
-                <SignedIn>
-                  <span className="text-white text-sm">{firstName || user?.name}</span>
-                  <UserButton />
-                </SignedIn>
-              </>
+              <button
+                onClick={() => window.location.href = '/auth/sign-in'}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors shadow-md"
+              >
+                Sign In
+              </button>
             )}
           </div>
         </nav>
