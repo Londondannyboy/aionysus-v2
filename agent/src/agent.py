@@ -1130,7 +1130,19 @@ async def chat_completions(request: Request):
                 try:
                     # Run the agent
                     result = await hume_agent.run(user_message)
-                    response_text = result.data if hasattr(result, 'data') else str(result)
+                    # Extract the actual text from AgentRunResult
+                    if hasattr(result, 'output'):
+                        response_text = str(result.output)
+                    elif hasattr(result, 'data'):
+                        response_text = str(result.data)
+                    else:
+                        response_text = str(result)
+                    # Clean up any AgentRunResult wrapper if it slipped through
+                    if response_text.startswith("AgentRunResult("):
+                        import re
+                        match = re.search(r'output=["\'](.+?)["\']', response_text)
+                        if match:
+                            response_text = match.group(1)
 
                     # Stream the response in chunks
                     words = response_text.split()
@@ -1191,7 +1203,19 @@ async def chat_completions(request: Request):
         else:
             # Non-streaming response
             result = await hume_agent.run(user_message)
-            response_text = result.data if hasattr(result, 'data') else str(result)
+            # Extract the actual text from AgentRunResult
+            if hasattr(result, 'output'):
+                response_text = str(result.output)
+            elif hasattr(result, 'data'):
+                response_text = str(result.data)
+            else:
+                response_text = str(result)
+            # Clean up any AgentRunResult wrapper if it slipped through
+            if response_text.startswith("AgentRunResult("):
+                import re
+                match = re.search(r'output=["\'](.+?)["\']', response_text)
+                if match:
+                    response_text = match.group(1)
 
             return {
                 "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
