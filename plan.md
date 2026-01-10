@@ -1,259 +1,100 @@
-# Aionysus v2 - Comprehensive Development Plan
+# Aionysus v2 - Development Plan
 
-**Last Updated:** January 2026
+**Last Updated:** January 10, 2026
 **Status:** Live at aionysus.wine
 
 ---
 
-## Current State
+## Current State Summary
 
 ### Completed
 - [x] Domain: aionysus.wine live on Vercel
 - [x] Database: 3,835 wines with investment data in Neon PostgreSQL
 - [x] Auth: Neon Auth with Google OAuth
-- [x] Agent: DIONYSUS on Railway (pydantic-ai-slim 1.40.0)
+- [x] Agent: DIONYSUS on Railway (Pydantic AI)
 - [x] Voice: Hume EVI with CLM endpoint `/chat/completions`
 - [x] Dynamic Backgrounds: Unsplash API for wine regions
 - [x] Investment Tools: get_investment_wines, calculate_wine_roi, build_portfolio
 - [x] Investment UI: Charts, ROI calculator, portfolio builder
 - [x] Wine Glass Voice Button: Burgundy themed, throbbing animation
 - [x] Phonetic Corrections: 30+ wine terms for voice recognition
+- [x] **Wine Listing Pages** (`/wines` with search & filters)
+- [x] **Wine Detail Pages** (`/wines/[slug]` with SEO/schema.org)
+- [x] **Category Pages** (`/wines/category/[type]`)
+- [x] **Shopping Cart** (`/cart` with localStorage)
+- [x] **NavBar** with categories dropdown and cart badge
+- [x] **UserMenu** dropdown with sign out
+- [x] Cloudinary image support
 
 ### In Progress
-- [ ] AG-UI chat responses (version mismatch being resolved)
-- [ ] Wine listing pages
-- [ ] Navigation with categories
+- [ ] **User Context** - Agent not consistently recognizing user's name from voice
 
 ### Not Started
-- [ ] Product detail pages
-- [ ] Search functionality
-- [ ] Shopify cart integration
+- [ ] Shopify Storefront API checkout
 - [ ] User dashboard
+- [ ] Saved wines / My Cellar
+- [ ] Order history
 
 ---
 
-## Phase 1: Navigation & Wine Discovery (Priority)
+## Priority 1: User Context Fix (ACTIVE)
 
-### 1.1 Navbar Component
-**Create:** `src/components/Navbar.tsx`
+### Problem
+The agent (DIONYSUS) doesn't consistently recognize the user's name when using Hume voice or CopilotKit chat.
 
-```
-[Logo] | [Search Bar] | [Categories ▼] | [Cart 🛒] | [User 👤]
-```
+### Current Implementation
+1. **CopilotKit Path:**
+   - `providers.tsx` adds user context to RuntimeConnector instructions
+   - Agent parses via `extract_user_from_instructions()`
 
-**Features:**
-- Sticky navbar with blur background
-- Search with autocomplete
-- Dropdown for categories
-- Cart icon with item count
-- User menu (sign in/profile)
+2. **Hume EVI Path:**
+   - `voice-input.tsx` configures session with `sessionSettings.systemPrompt`
+   - Agent parses via `extract_user_from_hume_messages()`
+   - Also scans user messages for patterns like "my name is X"
 
-### 1.2 Category Dropdown
-**Structure:**
-```
-Browse Wines
-├── By Type
-│   ├── Red Wines
-│   ├── White Wines
-│   ├── Rosé
-│   ├── Sparkling
-│   └── Dessert
-├── By Region
-│   ├── France
-│   │   ├── Bordeaux
-│   │   ├── Burgundy
-│   │   └── Champagne
-│   ├── Italy
-│   │   ├── Tuscany
-│   │   └── Piedmont
-│   └── More...
-├── Investment Grade
-└── Price Ranges
-    ├── Under £50
-    ├── £50 - £100
-    ├── £100 - £500
-    └── £500+
-```
+### Next Steps
+1. Debug what Hume EVI actually sends to CLM endpoint
+2. Add console logging in voice-input.tsx to verify session config
+3. Check if Hume dashboard shows the systemPrompt being passed
+4. Consider alternative: pass user info in custom metadata
 
-### 1.3 Wine Listing Pages
-
-**Routes to create:**
-| Route | Purpose |
-|-------|---------|
-| `/wines` | All wines with filters |
-| `/wines/red` | Red wines |
-| `/wines/white` | White wines |
-| `/wines/sparkling` | Sparkling/Champagne |
-| `/wines/rose` | Rosé wines |
-| `/wines/region/[region]` | By region (bordeaux, burgundy, etc.) |
-| `/wines/investment` | Investment-grade wines only |
-
-**Components needed:**
-- `src/components/wine/WineGrid.tsx` - Responsive grid of wine cards
-- `src/components/wine/WineCard.tsx` - Individual wine card
-- `src/components/wine/WineFilters.tsx` - Sidebar/drawer filters
-- `src/components/wine/SortDropdown.tsx` - Sort options
-- `src/components/wine/Pagination.tsx` - Page navigation
-
-**Filter options:**
-- Wine type
-- Region/Country
-- Price range (slider)
-- Vintage range
-- Investment score (if investment page)
-- Grape variety
-
-### 1.4 Wine Product Page
-
-**Route:** `/wine/[slug]`
-
-**Sections:**
-1. **Hero**
-   - Large wine image
-   - Name, winery, vintage
-   - Region badge
-   - Investment score badge (if applicable)
-
-2. **Purchase**
-   - Price (retail & trade)
-   - Quantity selector
-   - Add to Cart button
-   - Stock status
-
-3. **Details**
-   - Grape variety
-   - Alcohol %
-   - Bottle size
-   - Classification
-
-4. **Tasting Notes**
-   - AI-enhanced description
-   - Flavor profile tags
-
-5. **Investment Data** (if investment-grade)
-   - Investment score
-   - 5-year return
-   - Price history chart
-   - Liv-ex score
-   - Storage recommendation
-
-6. **Food Pairings**
-   - AI-generated pairings
-   - Pairing icons
-
-7. **Similar Wines**
-   - Recommendations grid
+### Files to Check
+- `src/components/voice-input.tsx` - Lines 50-80 (session config)
+- `src/components/providers.tsx` - Lines with RuntimeConnector
+- `agent/src/agent.py` - Lines 1163-1208 (extract functions)
 
 ---
 
-## Phase 2: Search Functionality
+## Priority 2: Shopify Checkout
 
-### 2.1 Search API
-**Route:** `src/app/api/wines/search/route.ts`
+### Current State
+- Cart uses localStorage for items
+- Shopify credentials in `.env`
+- No actual Shopify API calls yet
 
-**Parameters:**
-- `q` - Search query (name, winery, region, grape)
-- `type` - Wine type filter
-- `region` - Region filter
-- `minPrice` / `maxPrice` - Price range
-- `minVintage` / `maxVintage` - Vintage range
-- `investmentGrade` - Boolean filter
-- `sort` - price_asc, price_desc, score_desc, vintage_desc
-- `page` / `limit` - Pagination
+### Implementation Plan
+1. Create `src/lib/shopify.ts` with Storefront API client
+2. Update cart page to create Shopify checkout
+3. Redirect to Shopify hosted checkout
+4. Handle checkout completion webhook
 
-### 2.2 Search UI
-- Navbar search with debounced autocomplete
-- Search results page at `/search?q=...`
-- Recent searches (localStorage)
-- Popular searches suggestions
+### Files to Create/Update
+- `src/lib/shopify.ts` (new)
+- `src/app/cart/page.tsx` (update checkout button)
+- `src/app/api/webhooks/shopify/route.ts` (new, for order completion)
 
 ---
 
-## Phase 3: Shopify E-commerce
+## Priority 3: User Dashboard
 
-### 3.1 Environment Setup
-```env
-NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN=aionysus-3.myshopify.com
-NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN=xxx
-SHOPIFY_ADMIN_API_TOKEN=xxx
-```
+### Routes
+- `/dashboard` - Overview
+- `/dashboard/cellar` - Saved wines
+- `/dashboard/orders` - Order history
+- `/dashboard/portfolio` - Investment tracking
 
-### 3.2 Cart System
-**Files:**
-- `src/context/CartContext.tsx` - Cart state management
-- `src/components/cart/CartDrawer.tsx` - Slide-out cart
-- `src/components/cart/CartItem.tsx` - Cart line item
-- `src/components/cart/CartSummary.tsx` - Subtotal, checkout button
-
-**Features:**
-- Add/remove items
-- Update quantities
-- Persistent cart (localStorage + Shopify)
-- Real-time stock validation
-
-### 3.3 Product Sync
-- Sync wine database IDs with Shopify product IDs
-- Match by SKU or name
-- Update stock levels
-
-### 3.4 Agent Cart Tools
-```python
-@agent.tool
-async def add_to_cart(wine_id: int, quantity: int = 1):
-    """Add wine to shopping cart."""
-
-@agent.tool
-async def view_cart():
-    """Show current cart contents."""
-
-@agent.tool
-async def checkout():
-    """Redirect to Shopify checkout."""
-```
-
----
-
-## Phase 4: User Features
-
-### 4.1 User Dashboard
-**Route:** `/dashboard`
-
-**Sections:**
-- Welcome message with name
-- Recent orders
-- Saved wines count
-- Investment portfolio value (if any)
-
-### 4.2 My Cellar (Saved Wines)
-**Route:** `/dashboard/cellar`
-
-- Save wines to wishlist
-- Add notes
-- Track price changes
-- Get restock alerts
-
-### 4.3 Order History
-**Route:** `/dashboard/orders`
-
-- Past purchases from Shopify
-- Order status
-- Reorder functionality
-
-### 4.4 Investment Portfolio
-**Route:** `/dashboard/portfolio`
-
-- Track owned wines
-- Current value vs purchase price
-- Performance charts
-- Diversification analysis
-
----
-
-## Phase 5: Database Updates
-
-### New Tables
+### Database Schema (To Add)
 ```sql
--- User saved wines (wishlist/cellar)
 CREATE TABLE user_saved_wines (
   id SERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -263,7 +104,6 @@ CREATE TABLE user_saved_wines (
   UNIQUE(user_id, wine_id)
 );
 
--- User wine portfolio (owned wines)
 CREATE TABLE user_portfolio (
   id SERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -271,155 +111,121 @@ CREATE TABLE user_portfolio (
   quantity INTEGER DEFAULT 1,
   purchase_price DECIMAL(10,2),
   purchase_date DATE,
-  storage_location TEXT,
   shopify_order_id TEXT
-);
-
--- Price alerts
-CREATE TABLE price_alerts (
-  id SERIAL PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  wine_id INTEGER REFERENCES wines(id),
-  target_price DECIMAL(10,2),
-  alert_type TEXT CHECK (alert_type IN ('below', 'above')),
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW()
 );
 ```
 
 ---
 
-## Phase 6: SEO & Performance
-
-### 6.1 Static Generation
-- Pre-render wine pages with `generateStaticParams`
-- ISR with 1-hour revalidation
-- Sitemap generation for all wines
-
-### 6.2 SEO
-- Wine-specific JSON-LD schema
-- OpenGraph images
-- Meta descriptions from tasting notes
-- Canonical URLs
-
-### 6.3 Performance
-- Image optimization with next/image
-- Lazy loading wine grids
-- Skeleton loading states
-- Edge caching
-
----
-
-## Implementation Priority
-
-### Immediate (This Week)
-1. [ ] Fix AG-UI chat responses
-2. [ ] Create Navbar with search placeholder
-3. [ ] Create `/wines` listing page
-4. [ ] Create WineCard and WineGrid components
-5. [ ] Add basic filtering
-
-### Short Term (Next 2 Weeks)
-1. [ ] Wine product pages `/wine/[slug]`
-2. [ ] Category routes
-3. [ ] Search functionality
-4. [ ] Shopify cart integration
-
-### Medium Term (Month)
-1. [ ] User dashboard
-2. [ ] Saved wines / My Cellar
-3. [ ] Order history
-4. [ ] Investment portfolio tracking
-
-### Long Term
-1. [ ] Price alerts
-2. [ ] Advanced recommendations
-3. [ ] Social features
-4. [ ] Mobile app
-
----
-
-## File Structure (Target)
+## Completed File Structure
 
 ```
 src/
 ├── app/
-│   ├── page.tsx                    # Homepage
-│   ├── layout.tsx                  # Root layout with Navbar
+│   ├── page.tsx                      # Homepage with CopilotSidebar
+│   ├── layout.tsx                    # Root layout with NavBar
+│   ├── globals.css                   # Global styles
 │   ├── wines/
-│   │   ├── page.tsx               # All wines
-│   │   ├── [type]/page.tsx        # By type
-│   │   ├── region/[region]/page.tsx
-│   │   └── investment/page.tsx
-│   ├── wine/
-│   │   └── [slug]/page.tsx        # Product detail
-│   ├── search/
-│   │   └── page.tsx               # Search results
-│   ├── dashboard/
-│   │   ├── page.tsx               # Dashboard home
-│   │   ├── cellar/page.tsx        # Saved wines
-│   │   ├── orders/page.tsx        # Order history
-│   │   └── portfolio/page.tsx     # Investment tracking
-│   └── api/
-│       ├── wines/
-│       │   ├── route.ts           # GET wines
-│       │   ├── search/route.ts    # Search endpoint
-│       │   └── [id]/route.ts      # Single wine
-│       ├── cart/
-│       │   └── route.ts           # Cart operations
-│       └── ...existing
-├── components/
-│   ├── Navbar.tsx                 # Main navigation
-│   ├── wine/
-│   │   ├── WineCard.tsx
-│   │   ├── WineGrid.tsx
-│   │   ├── WineFilters.tsx
-│   │   ├── WineDetail.tsx
-│   │   └── SimilarWines.tsx
+│   │   ├── page.tsx                  # Wine listing with search/filters
+│   │   ├── [slug]/
+│   │   │   ├── page.tsx              # Server component (SEO)
+│   │   │   └── WineDetailClient.tsx  # Client component (cart)
+│   │   └── category/
+│   │       └── [type]/
+│   │           ├── page.tsx          # Server component
+│   │           └── WineCategoryClient.tsx # Client component
 │   ├── cart/
-│   │   ├── CartDrawer.tsx
-│   │   ├── CartItem.tsx
-│   │   └── CartSummary.tsx
-│   ├── search/
-│   │   ├── SearchBar.tsx
-│   │   └── SearchResults.tsx
-│   └── ...existing
-├── context/
-│   └── CartContext.tsx
+│   │   └── page.tsx                  # Shopping cart
+│   └── api/
+│       ├── wines/route.ts            # GET /api/wines
+│       ├── copilotkit/route.ts       # AG-UI proxy
+│       ├── hume-token/route.ts       # Hume access token
+│       └── zep-*/                    # Memory APIs
+├── components/
+│   ├── NavBar.tsx                    # Navigation with categories
+│   ├── UserMenu.tsx                  # User dropdown
+│   ├── voice-input.tsx               # Wine glass voice button
+│   ├── investment.tsx                # Investment UI components
+│   ├── charts.tsx                    # Recharts components
+│   ├── DynamicBackground.tsx         # Unsplash backgrounds
+│   └── providers.tsx                 # CopilotKit + Neon Auth
 └── lib/
-    ├── db.ts
-    ├── shopify.ts
-    └── ...existing
+    └── auth/client.ts                # Auth client
 ```
 
 ---
 
-## Environment Variables (Complete)
+## Agent File Structure
 
+```
+agent/
+├── src/
+│   └── agent.py                      # DIONYSUS agent
+├── pyproject.toml                    # Dependencies
+└── Procfile                          # Railway deployment
+```
+
+### Agent Key Functions (agent.py)
+- `extract_user_from_instructions()` - Parse CopilotKit user context
+- `extract_user_from_hume_messages()` - Parse Hume CLM user context
+- `build_system_prompt()` - Generate personalized system prompt
+- `search_wines()` - Wine search tool
+- `get_wine_details()` - Single wine lookup
+- `get_investment_wines()` - Investment wines
+- `calculate_wine_roi()` - ROI calculator
+- `build_portfolio()` - Portfolio builder
+- `/agui/` - AG-UI endpoint for CopilotKit
+- `/chat/completions` - OpenAI-compatible for Hume CLM
+
+---
+
+## Testing Checklist
+
+### Wine Pages
+- [x] `/wines` loads with all wines
+- [x] Search filters results correctly
+- [x] Type filter works
+- [x] Price filter works
+- [x] Region filter works
+- [x] Winery filter works
+- [x] Category pages load correct type
+- [x] Detail pages show correct wine
+- [x] Add to cart updates localStorage
+- [x] NavBar cart badge updates
+
+### Voice
+- [x] Wine glass button activates Hume
+- [x] Voice transcription works
+- [x] Agent responds with wine knowledge
+- [ ] Agent knows user's name (IN PROGRESS)
+
+### Chat
+- [x] CopilotKit sidebar opens/closes
+- [x] Messages send to agent
+- [x] Tools render UI components
+- [ ] User context passed correctly (IN PROGRESS)
+
+---
+
+## Environment Variables Reference
+
+### Vercel
 ```env
-# Database
-DATABASE_URL=postgresql://...
-
-# Agent
+DATABASE_URL=postgresql://neondb_owner:***@ep-square-frog-abxc6js2-pooler.eu-west-2.aws.neon.tech/neondb
 NEXT_PUBLIC_AGENT_URL=https://aionysus-agent-production.up.railway.app
-
-# Auth
-NEON_AUTH_BASE_URL=https://...
-
-# Voice
-HUME_API_KEY=...
-HUME_SECRET_KEY=...
-NEXT_PUBLIC_HUME_API_KEY=...
+NEON_AUTH_BASE_URL=https://ep-square-frog-abxc6js2.neonauth.eu-west-2.aws.neon.tech/neondb/auth
 NEXT_PUBLIC_HUME_CONFIG_ID=29cec14d-5272-4a79-820d-382dc0d0e801
+HUME_API_KEY=***
+HUME_SECRET_KEY=***
+NEXT_PUBLIC_HUME_API_KEY=***
+ZEP_API_KEY=***
+NEXT_PUBLIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN=***
+NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN=aionysus.myshopify.com
+```
 
-# Memory
-ZEP_API_KEY=...
-
-# Shopify
-NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN=aionysus-3.myshopify.com
-NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN=...
-SHOPIFY_ADMIN_API_TOKEN=...
-
-# Images
-UNSPLASH_ACCESS_KEY=...
+### Railway
+```env
+DATABASE_URL=postgresql://neondb_owner:***@ep-square-frog-abxc6js2-pooler.eu-west-2.aws.neon.tech/neondb
+GROQ_API_KEY=***
+ZEP_API_KEY=***
 ```

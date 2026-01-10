@@ -1,7 +1,7 @@
 # Aionysus v2 - AI Wine Sommelier Platform
 
 **Live at:** [aionysus.wine](https://aionysus.wine)
-**Last Updated:** January 2026
+**Last Updated:** January 10, 2026
 
 ---
 
@@ -11,15 +11,39 @@
 
 | Feature | Technology | Status |
 |---------|------------|--------|
-| AI Sommelier | DIONYSUS (Pydantic AI on Railway) | Live |
-| Chat Interface | CopilotKit + AG-UI protocol | Live |
-| Voice | Hume EVI with CLM | Live |
-| Dynamic Backgrounds | Unsplash API by region | Live |
-| Investment Analytics | Recharts + custom components | Live |
-| Authentication | Neon Auth (Google OAuth) | Live |
-| Database | Neon PostgreSQL (3,835 wines) | Live |
-| E-commerce | Shopify Storefront API | Pending |
-| User Memory | Zep | Live |
+| AI Sommelier | DIONYSUS (Pydantic AI on Railway) | **Live** |
+| Chat Interface | CopilotKit + AG-UI protocol | **Live** |
+| Voice | Hume EVI with CLM | **Live** |
+| Wine Listings | `/wines` with search & filters | **Live** |
+| Wine Detail Pages | `/wines/[slug]` with SEO | **Live** |
+| Category Pages | `/wines/category/[type]` | **Live** |
+| Shopping Cart | localStorage + Shopify ready | **Live** |
+| NavBar | Categories dropdown + cart count | **Live** |
+| Dynamic Backgrounds | Unsplash API by region | **Live** |
+| Investment Analytics | Recharts + custom components | **Live** |
+| Authentication | Neon Auth (Google OAuth) | **Live** |
+| Database | Neon PostgreSQL (3,835 wines) | **Live** |
+| E-commerce | Shopify Storefront API | **Ready** |
+| User Memory | Zep | **Live** |
+
+---
+
+## Recent Changes (January 2026)
+
+### Wine E-commerce Pages Created
+- `/wines` - Main listing with search, type/price/region/winery filters
+- `/wines/[slug]` - Product detail pages with SEO, schema.org markup, add to cart
+- `/wines/category/[type]` - Category pages (red, white, rose, champagne, sparkling, dessert)
+- `/cart` - Shopping cart with quantity controls, localStorage persistence
+- `NavBar.tsx` - Navigation with wine categories dropdown, cart count badge
+- `UserMenu.tsx` - User dropdown with sign out
+
+### Agent User Context Improvements
+- `extract_user_from_hume_messages()` - Extracts name from:
+  - System prompt patterns: `Name: X`, session ID `name|aionysus_userid`
+  - User messages: "my name is X", "I'm X", "call me X"
+- User context placed at TOP of system prompt with explicit rules
+- Falls back to cached context from CopilotKit middleware
 
 ---
 
@@ -30,17 +54,25 @@
 │                         FRONTEND                                 │
 │                    (Vercel - Next.js 16)                        │
 ├─────────────────────────────────────────────────────────────────┤
-│  src/app/page.tsx          │  Main homepage with voice input    │
-│  src/components/           │  UI components                     │
-│    ├── voice-input.tsx     │  Wine glass voice button          │
-│    ├── investment.tsx      │  Investment UI components         │
-│    ├── charts.tsx          │  Wine charts (Recharts)           │
-│    ├── DynamicBackground   │  Unsplash region backgrounds      │
-│    └── providers.tsx       │  CopilotKit + Neon Auth           │
-│  src/app/api/              │  API routes                       │
-│    ├── copilotkit/         │  AG-UI proxy to agent             │
-│    ├── hume-token/         │  Hume access tokens               │
-│    └── zep-*/              │  Memory storage                   │
+│  src/app/                                                        │
+│    ├── page.tsx            │  Homepage with CopilotSidebar       │
+│    ├── wines/                                                    │
+│    │   ├── page.tsx        │  Wine listing (3,835 wines)        │
+│    │   ├── [slug]/page.tsx │  Wine detail with SEO              │
+│    │   └── category/[type] │  Red, white, rose, etc.            │
+│    ├── cart/page.tsx       │  Shopping cart                     │
+│    └── api/                                                      │
+│        ├── wines/route.ts  │  GET /api/wines                    │
+│        ├── copilotkit/     │  AG-UI proxy to agent              │
+│        ├── hume-token/     │  Hume access tokens                │
+│        └── zep-*/          │  Memory storage                    │
+│                                                                  │
+│  src/components/                                                 │
+│    ├── NavBar.tsx          │  Navigation + categories + cart    │
+│    ├── UserMenu.tsx        │  User dropdown menu                │
+│    ├── voice-input.tsx     │  Wine glass voice button           │
+│    ├── investment.tsx      │  Investment UI components          │
+│    └── providers.tsx       │  CopilotKit + Neon Auth            │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -53,6 +85,11 @@
 │    ├── /agui/              │  AG-UI protocol for CopilotKit    │
 │    ├── /chat/completions   │  OpenAI-compatible for Hume CLM   │
 │    └── /health             │  Health check                     │
+│                                                                  │
+│  User Context Extraction:                                        │
+│    ├── extract_user_from_instructions()  │ CopilotKit           │
+│    ├── extract_user_from_hume_messages() │ Hume CLM             │
+│    └── _cached_user_context              │ Fallback cache       │
 │                                                                  │
 │  Tools:                                                          │
 │    ├── search_wines        │  Search by region/type/price      │
@@ -73,13 +110,15 @@
 │              (Neon PostgreSQL - aionysus.wine)                  │
 ├─────────────────────────────────────────────────────────────────┤
 │  wines (3,835 rows)                                             │
-│    ├── Core: id, name, winery, region, country, grape_variety  │
-│    ├── Details: vintage, wine_type, style, color, tasting_notes│
+│    ├── Core: id, name, slug, winery, region, country,          │
+│    │         grape_variety                                      │
+│    ├── Details: vintage, wine_type, style, color, is_active    │
 │    ├── Pricing: price_retail, price_trade                      │
 │    ├── Investment: price_history (JSONB), investment_score,    │
 │    │               is_investment_grade, storage_type,          │
 │    │               five_year_return, liv_ex_score              │
-│    └── Commerce: stock_quantity, slug, is_active               │
+│    ├── Media: image_url (Cloudinary)                           │
+│    └── Commerce: stock_quantity                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -90,13 +129,11 @@
 | Service | URL |
 |---------|-----|
 | Production Site | https://aionysus.wine |
+| Wine Listings | https://aionysus.wine/wines |
 | Agent (Railway) | https://aionysus-agent-production.up.railway.app |
 | Agent Health | https://aionysus-agent-production.up.railway.app/health |
 | AG-UI Endpoint | https://aionysus-agent-production.up.railway.app/agui/ |
 | Hume CLM | https://aionysus-agent-production.up.railway.app/chat/completions |
-| Vercel Dashboard | Vercel → aionysus-v2 |
-| Railway Dashboard | Railway → aionysus-agent |
-| Neon Console | Neon → aionysus.wine project |
 
 ---
 
@@ -112,6 +149,8 @@ HUME_API_KEY=***
 HUME_SECRET_KEY=***
 NEXT_PUBLIC_HUME_API_KEY=***
 ZEP_API_KEY=***
+NEXT_PUBLIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN=***
+NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN=aionysus.myshopify.com
 ```
 
 ### Railway (Agent)
@@ -123,33 +162,78 @@ ZEP_API_KEY=***
 
 ---
 
-## Wine Investment Data
+## Key Files
 
-### Investment Columns
-| Column | Type | Description |
-|--------|------|-------------|
-| price_history | JSONB | Array of {year, price, trend, volume} |
-| investment_score | DECIMAL(3,1) | 1-10 score based on appreciation + prestige |
-| is_investment_grade | BOOLEAN | True if score >= 7 or high-value region |
-| storage_type | VARCHAR(20) | 'bonded', 'private_cellar', 'retail' |
-| five_year_return | DECIMAL(5,1) | Percentage return over 5 years |
-| liv_ex_score | INTEGER | Liv-ex rating (70-100) for investment wines |
+### Frontend
+| File | Purpose |
+|------|---------|
+| `src/app/page.tsx` | Homepage with CopilotSidebar |
+| `src/app/wines/page.tsx` | Wine listing with search & filters |
+| `src/app/wines/[slug]/page.tsx` | Wine detail page (server) with SEO |
+| `src/app/wines/[slug]/WineDetailClient.tsx` | Wine detail (client) with cart |
+| `src/app/wines/category/[type]/page.tsx` | Category pages |
+| `src/app/cart/page.tsx` | Shopping cart |
+| `src/app/api/wines/route.ts` | GET /api/wines API |
+| `src/components/NavBar.tsx` | Navigation with categories |
+| `src/components/UserMenu.tsx` | User dropdown menu |
+| `src/components/voice-input.tsx` | Wine glass voice button |
+| `src/components/providers.tsx` | CopilotKit + Neon Auth |
 
-### Investment-Grade Criteria
-- Region: Bordeaux, Burgundy, Champagne, Tuscany, Piedmont, Rhône, Napa
-- Classification: First Growth, Grand Cru, Premier Cru, Super Tuscan
-- Price: >= £100 retail OR >= £500 any region
+### Agent
+| File | Purpose |
+|------|---------|
+| `agent/src/agent.py` | DIONYSUS Pydantic AI agent |
+| `agent/pyproject.toml` | Python dependencies (uv) |
 
 ---
 
-## Voice Input
+## Development Commands
 
-### Hume Configuration
+```bash
+# Start frontend development
+npm run dev
+
+# Start agent locally
+cd agent && uv run uvicorn src.agent:app --reload --port 8000
+
+# Deploy agent to Railway (from agent directory)
+cd agent && git add . && git commit -m "msg" && git push origin main
+
+# Build check
+npm run build
+```
+
+---
+
+## Known Issues / In Progress
+
+### User Context (ACTIVE)
+**Problem:** Hume voice may not be passing user name to CLM endpoint properly.
+
+**Current Solution:**
+- Agent extracts name from system prompt and user messages
+- Falls back to cached context from CopilotKit
+- Explicit rules in system prompt to respond with user's name
+
+**To Test:**
+1. Sign in to aionysus.wine
+2. Open voice input (wine glass button)
+3. Say "My name is [your name]" or "What is my name?"
+4. Agent should recognize and use the name
+
+### CopilotKit Chat
+- Working but may need context improvement
+- Uses AG-UI protocol via `/agui/` endpoint
+
+---
+
+## Hume EVI Configuration
+
 - **Config ID:** `29cec14d-5272-4a79-820d-382dc0d0e801`
 - **CLM Endpoint:** `/chat/completions` (OpenAI-compatible)
-- **System Prompt:** DIONYSUS wine sommelier persona
+- **Session ID Format:** `{name}|aionysus_{userId}` or `{userId}` if no name
 
-### Phonetic Corrections
+### Phonetic Corrections (agent.py)
 ```python
 PHONETIC_CORRECTIONS = {
     "bow jo lay": "beaujolais",
@@ -157,80 +241,38 @@ PHONETIC_CORRECTIONS = {
     "pin oh noir": "pinot noir",
     "bor doh": "bordeaux",
     "burr gun dee": "burgundy",
-    "shah toe": "chateau",
-    "doe main": "domaine",
     # ... 30+ wine terms
 }
 ```
 
 ---
 
-## Generative UI Components
+## Shopify Integration
 
-### AG-UI Tool Renderers (page.tsx)
-| Tool | Component | Purpose |
-|------|-----------|---------|
-| show_wine_regions | WineRegionChart | Bar chart by region |
-| show_wine_types | WineTypeChart | Pie chart by type |
-| show_investment_chart | InvestmentPriceChart | Area chart with price history |
-| get_investment_wines | InvestmentWinesGrid | Grid of investment wine cards |
-| calculate_wine_roi | ROICalculator | ROI breakdown with costs |
-| build_portfolio | PortfolioBuilder | Portfolio pie chart + holdings |
-| search_wines | WineCard grid | Search results display |
-| get_food_pairings | Pairing cards | Food suggestions |
-| show_taste_profile | ForceGraph3D | 3D taste profile graph |
+**Store:** aionysus.myshopify.com
+**Status:** Credentials in .env, ready for Storefront API integration
+
+The cart currently uses localStorage. Shopify integration is ready but needs:
+1. Product sync (wines DB → Shopify products)
+2. Storefront API checkout flow
 
 ---
 
-## Development Commands
+## Testing the Agent
 
+### Test Hume CLM directly:
 ```bash
-# Start development (frontend + local agent)
-npm run dev
-
-# Start frontend only
-npm run dev:ui
-
-# Start agent only
-cd agent && uv run uvicorn src.agent:app --reload --port 8000
-
-# Deploy agent to Railway
-cd agent && railway up
-
-# Update agent dependencies
-cd agent && uv lock --upgrade && uv sync
+curl -X POST https://aionysus-agent-production.up.railway.app/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "system", "content": "Name: Dan"},
+      {"role": "user", "content": "What is my name?"}
+    ]
+  }'
 ```
 
----
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/app/page.tsx` | Main homepage with CopilotSidebar |
-| `src/components/voice-input.tsx` | Wine glass voice button |
-| `src/components/investment.tsx` | Investment UI components |
-| `src/components/DynamicBackground.tsx` | Unsplash region backgrounds |
-| `src/components/providers.tsx` | CopilotKit + Neon Auth providers |
-| `src/app/api/copilotkit/route.ts` | AG-UI proxy route |
-| `agent/src/agent.py` | DIONYSUS Pydantic AI agent |
-| `scripts/add-investment-data.mjs` | Mock investment data generator |
-
----
-
-## Roadmap
-
-See `plan.md` for comprehensive development plan.
-
-### Immediate Priorities
-1. Fix AG-UI chat responses
-2. Add Navbar with search and categories
-3. Create wine listing pages (`/wines`)
-4. Create wine product pages (`/wine/[slug]`)
-5. Integrate Shopify cart
-
-### Future Features
-- User dashboard with saved wines
-- Investment portfolio tracking
-- Price alerts
-- Order history
+### Test AG-UI (CopilotKit):
+```bash
+curl https://aionysus-agent-production.up.railway.app/health
+```

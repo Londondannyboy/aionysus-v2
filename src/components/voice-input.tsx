@@ -210,9 +210,18 @@ ${greetingInstruction}
             setSessionValue(SESSION_GREETED_KEY, true);
             sendUserInput(`Hello, my name is ${firstName}`);
           }, 500);
+        } else if (isQuickReconnect && firstName) {
+          // QUICK RECONNECT with name - send a brief context reminder
+          console.log("🎤 Quick reconnect - sending context reminder for:", firstName);
+          greetedThisSession.current = true;
+          setSessionValue(SESSION_GREETED_KEY, true);
+          // Don't send a full greeting, but ensure the name is in the conversation
+          setTimeout(() => {
+            sendUserInput(`It's ${firstName} again. What were we discussing?`);
+          }, 500);
         } else {
-          // RECONNECTION - do NOT send any input, just mark as greeted
-          console.log("🎤 RECONNECTION detected - NOT re-greeting. wasGreeted:", wasGreeted, "quickReconnect:", isQuickReconnect);
+          // RECONNECTION without name - just mark as greeted
+          console.log("🎤 RECONNECTION detected - NOT re-greeting. wasGreeted:", wasGreeted, "quickReconnect:", isQuickReconnect, "firstName:", firstName);
           greetedThisSession.current = true;
           setSessionValue(SESSION_GREETED_KEY, true);
           // Don't call sendUserInput at all!

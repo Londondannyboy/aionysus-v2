@@ -1113,6 +1113,16 @@ async def extract_user_middleware(request: Request, call_next):
             if body_bytes:
                 body = json.loads(body_bytes)
 
+                # DEBUG: Log request structure for AG-UI endpoints
+                path = str(request.url.path)
+                if "/agui" in path:
+                    print(f"🔍 AG-UI request to {path}:", file=sys.stderr)
+                    print(f"   Keys: {list(body.keys())}", file=sys.stderr)
+                    if body.get("state"):
+                        print(f"   State keys: {list(body.get('state', {}).keys()) if isinstance(body.get('state'), dict) else type(body.get('state'))}", file=sys.stderr)
+                    if body.get("context"):
+                        print(f"   Context: {body.get('context')[:200] if isinstance(body.get('context'), str) else len(body.get('context'))} items", file=sys.stderr)
+
                 # Check OpenAI format (messages array)
                 messages = body.get("messages", [])
                 for msg in messages:
