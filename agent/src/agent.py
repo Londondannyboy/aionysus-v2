@@ -288,15 +288,22 @@ When discussing a specific wine region, UPDATE THE SCENE to show that region!
 """).strip()
 
 
+# Create agent with dynamic system prompt
+agent = Agent(
+    model=model,
+    system_prompt=build_system_prompt(),  # Default prompt
+)
+
+
 # Dynamic system prompt that includes user context
 @agent.system_prompt
-async def get_system_prompt(ctx: RunContext[StateDeps[AppState]]) -> str:
+async def get_dynamic_system_prompt(ctx: RunContext[StateDeps[AppState]]) -> str:
     """Generate system prompt with user context."""
     user_name = None
     zep_context = ""
 
     # Try to get user from state
-    if ctx.deps.state.user:
+    if ctx.deps.state and ctx.deps.state.user:
         user_name = ctx.deps.state.user.firstName or ctx.deps.state.user.name
         user_id = ctx.deps.state.user.id
 
@@ -317,12 +324,6 @@ async def get_system_prompt(ctx: RunContext[StateDeps[AppState]]) -> str:
         print(f"🍷 AG-UI request for: {user_name}", file=sys.stderr)
 
     return build_system_prompt(user_name, zep_context)
-
-
-agent = Agent(
-    model=model,
-    system_prompt=build_system_prompt(),  # Default prompt, overridden by dynamic one
-)
 
 
 # =====
