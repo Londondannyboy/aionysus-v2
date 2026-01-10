@@ -220,10 +220,20 @@ model = GroqModel(
 # =====
 # DIONYSUS Agent
 # =====
-SYSTEM_PROMPT = dedent("""
+def build_system_prompt(user_name: Optional[str] = None, zep_context: str = "") -> str:
+    """Build system prompt with optional user context."""
+    user_section = ""
+    if user_name:
+        user_section = f"""
+## IMPORTANT - CURRENT USER
+You are helping {user_name}. Address them by name naturally.
+{zep_context if zep_context else "This is their first conversation with you."}
+"""
+
+    return dedent(f"""
 You are DIONYSUS, an expert AI wine sommelier for Aionysus.
 You help users discover fine wines, understand investment potential, and find perfect food pairings.
-
+{user_section}
 ## Your Expertise:
 - 3,800+ wines from premier regions worldwide
 - Investment-grade wines and market trends
@@ -275,11 +285,43 @@ When discussing a specific wine region, UPDATE THE SCENE to show that region!
 - When showing wines, limit to 6-8 at a time
 - Include prices in GBP (£)
 - Mention vintage when relevant
-""")
+""").strip()
+
+
+# Dynamic system prompt that includes user context
+@agent.system_prompt
+async def get_system_prompt(ctx: RunContext[StateDeps[AppState]]) -> str:
+    """Generate system prompt with user context."""
+    user_name = None
+    zep_context = ""
+
+    # Try to get user from state
+    if ctx.deps.state.user:
+        user_name = ctx.deps.state.user.firstName or ctx.deps.state.user.name
+        user_id = ctx.deps.state.user.id
+
+        # Fetch Zep context
+        if user_id and ZEP_API_KEY:
+            try:
+                zep_ctx, _ = await get_user_wine_preferences(user_id)
+                if zep_ctx:
+                    zep_context = zep_ctx
+            except:
+                pass
+
+    # Fall back to cached context
+    if not user_name and _cached_user_context.get("name"):
+        user_name = _cached_user_context.get("name")
+
+    if user_name:
+        print(f"🍷 AG-UI request for: {user_name}", file=sys.stderr)
+
+    return build_system_prompt(user_name, zep_context)
+
 
 agent = Agent(
     model=model,
-    system_prompt=SYSTEM_PROMPT,
+    system_prompt=build_system_prompt(),  # Default prompt, overridden by dynamic one
 )
 
 
@@ -1046,7 +1088,7 @@ main_app.add_middleware(
     allow_headers=["*"],
 )
 
-# Middleware to extract user from CopilotKit instructions
+# Middleware to extract user from CopilotKit/AG-UI instructions
 @main_app.middleware("http")
 async def extract_user_middleware(request: Request, call_next):
     if request.method == "POST":
@@ -1054,11 +1096,37 @@ async def extract_user_middleware(request: Request, call_next):
             body_bytes = await request.body()
             if body_bytes:
                 body = json.loads(body_bytes)
+
+                # Check OpenAI format (messages array)
                 messages = body.get("messages", [])
                 for msg in messages:
-                    if msg.get("role") == "system" and "User ID:" in msg.get("content", ""):
-                        extract_user_from_instructions(msg["content"])
+                    content = msg.get("content", "")
+                    if msg.get("role") == "system" and ("User ID:" in content or "User Name:" in content):
+                        extract_user_from_instructions(content)
                         break
+
+                # Check AG-UI format (context field with instructions)
+                context = body.get("context", [])
+                for ctx in context:
+                    if isinstance(ctx, dict):
+                        # Check for instructions in context
+                        desc = ctx.get("description", "")
+                        if "User ID:" in desc or "User Name:" in desc:
+                            extract_user_from_instructions(desc)
+                            break
+
+                # Check AG-UI state for user info
+                state = body.get("state", {})
+                if isinstance(state, dict) and state.get("user"):
+                    user_data = state.get("user", {})
+                    if user_data.get("id"):
+                        global _cached_user_context
+                        _cached_user_context = {
+                            "user_id": user_data.get("id"),
+                            "name": user_data.get("firstName") or user_data.get("name"),
+                            "email": user_data.get("email"),
+                        }
+                        print(f"🍷 User from AG-UI state: {_cached_user_context.get('name')}", file=sys.stderr)
 
                 async def receive():
                     return {"type": "http.request", "body": body_bytes}
@@ -1076,6 +1144,29 @@ main_app.mount("/agui", ag_ui_app)
 # =====
 # OpenAI-compatible /chat/completions endpoint for Hume CLM
 # =====
+def extract_user_from_hume_prompt(system_prompt: str) -> dict:
+    """Extract user info from Hume's system prompt."""
+    result = {"name": None, "user_id": None}
+    if not system_prompt:
+        return result
+
+    # Look for "Name: X" pattern
+    name_match = re.search(r'Name:\s*([^\n]+)', system_prompt)
+    if name_match:
+        name = name_match.group(1).strip()
+        if name and name.lower() != 'guest wine enthusiast':
+            result["name"] = name
+
+    # Look for session ID with user name: "name|aionysus_userid"
+    session_match = re.search(r'([^|]+)\|aionysus_([a-f0-9-]+)', system_prompt)
+    if session_match:
+        if session_match.group(1).strip():
+            result["name"] = session_match.group(1).strip()
+        result["user_id"] = session_match.group(2)
+
+    return result
+
+
 @main_app.post("/chat/completions")
 async def chat_completions(request: Request):
     """OpenAI-compatible chat completions endpoint for Hume CLM integration."""
@@ -1095,6 +1186,19 @@ async def chat_completions(request: Request):
             else:
                 conversation.append({"role": role, "content": content})
 
+        # Extract user context from Hume's system prompt
+        user_context = extract_user_from_hume_prompt(system_prompt or "")
+        user_name = user_context.get("name")
+        user_id = user_context.get("user_id")
+
+        # Also check cached context from middleware
+        if not user_name and _cached_user_context.get("name"):
+            user_name = _cached_user_context.get("name")
+        if not user_id and _cached_user_context.get("user_id"):
+            user_id = _cached_user_context.get("user_id")
+
+        print(f"🎤 Hume CLM - User: {user_name or 'anonymous'}", file=sys.stderr)
+
         # Get the last user message
         user_message = ""
         for msg in reversed(conversation):
@@ -1108,6 +1212,26 @@ async def chat_completions(request: Request):
         # Apply phonetic corrections
         user_message = apply_phonetic_corrections(user_message)
 
+        # Fetch Zep context if we have a user ID
+        zep_context = ""
+        if user_id and ZEP_API_KEY:
+            try:
+                zep_ctx, _ = await get_user_wine_preferences(user_id)
+                if zep_ctx:
+                    zep_context = zep_ctx
+                    print(f"🧠 Zep context loaded for Hume", file=sys.stderr)
+            except Exception as e:
+                print(f"[Hume Zep] Error: {e}", file=sys.stderr)
+
+        # Build personalized system prompt
+        user_section = ""
+        if user_name:
+            user_section = f"""
+## IMPORTANT - USER CONTEXT
+You are speaking with {user_name}. Address them by name naturally in conversation.
+{zep_context}
+"""
+
         # Create a simple agent for Hume (without tools - just chat)
         hume_agent = Agent(
             model=GroqModel("llama-3.3-70b-versatile"),
@@ -1116,7 +1240,7 @@ async def chat_completions(request: Request):
                 You have deep knowledge of wines, regions, investments, and pairings.
                 Keep responses concise for voice - 1-2 sentences unless asked for details.
                 Be warm, knowledgeable, and approachable.
-
+                {user_section}
                 {system_prompt or ''}
             """).strip(),
         )
