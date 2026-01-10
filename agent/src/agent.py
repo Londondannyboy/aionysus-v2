@@ -222,18 +222,33 @@ model = GroqModel(
 # =====
 def build_system_prompt(user_name: Optional[str] = None, zep_context: str = "") -> str:
     """Build system prompt with optional user context."""
-    user_section = ""
+    # User context MUST be at the top and explicit
     if user_name:
         user_section = f"""
-## IMPORTANT - CURRENT USER
-You are helping {user_name}. Address them by name naturally.
-{zep_context if zep_context else "This is their first conversation with you."}
+## CRITICAL USER CONTEXT - READ THIS FIRST!
+**The user's name is: {user_name}**
+
+RULES YOU MUST FOLLOW:
+1. When asked "What is my name?" → Answer: "Your name is {user_name}!"
+2. ALWAYS greet them as {user_name} in your first response
+3. NEVER say "I don't have access to your name" - YOU DO, it's {user_name}!
+4. NEVER say "I don't have personal information" - the name is RIGHT HERE!
+5. Address {user_name} by name naturally in conversation
+
+{zep_context if zep_context else f"This is {user_name}'s first conversation with you."}
+"""
+    else:
+        user_section = """
+## USER CONTEXT
+The user is not logged in or name was not provided. Ask them for their name if relevant.
 """
 
     return dedent(f"""
+{user_section}
+
 You are DIONYSUS, an expert AI wine sommelier for Aionysus.
 You help users discover fine wines, understand investment potential, and find perfect food pairings.
-{user_section}
+
 ## Your Expertise:
 - 3,800+ wines from premier regions worldwide
 - Investment-grade wines and market trends
@@ -1224,25 +1239,39 @@ async def chat_completions(request: Request):
             except Exception as e:
                 print(f"[Hume Zep] Error: {e}", file=sys.stderr)
 
-        # Build personalized system prompt
-        user_section = ""
+        # Build personalized system prompt - USER CONTEXT MUST BE FIRST AND EXPLICIT
         if user_name:
             user_section = f"""
-## IMPORTANT - USER CONTEXT
-You are speaking with {user_name}. Address them by name naturally in conversation.
-{zep_context}
+## CRITICAL - USER IDENTITY (READ THIS FIRST!)
+**The user's name is: {user_name}**
+
+MANDATORY RULES:
+1. If asked "What is my name?" → Say "Your name is {user_name}!"
+2. Greet them as {user_name} warmly
+3. NEVER say "I don't have your name" - YOU DO, it's {user_name}!
+4. NEVER say "I don't have personal information" - the name is RIGHT HERE!
+5. Address {user_name} by name naturally
+
+{zep_context if zep_context else f"This is {user_name}'s first conversation with you."}
+"""
+        else:
+            user_section = """
+## USER CONTEXT
+No user name provided. You may ask for their name if relevant.
 """
 
         # Create a simple agent for Hume (without tools - just chat)
         hume_agent = Agent(
             model=GroqModel("llama-3.3-70b-versatile"),
             system_prompt=dedent(f"""
-                You are DIONYSUS, an expert AI wine sommelier for Aionysus.
-                You have deep knowledge of wines, regions, investments, and pairings.
-                Keep responses concise for voice - 1-2 sentences unless asked for details.
-                Be warm, knowledgeable, and approachable.
-                {user_section}
-                {system_prompt or ''}
+{user_section}
+
+You are DIONYSUS, an expert AI wine sommelier for Aionysus.
+You have deep knowledge of wines, regions, investments, and pairings.
+Keep responses concise for voice - 1-2 sentences unless asked for details.
+Be warm, knowledgeable, and approachable.
+
+{system_prompt or ''}
             """).strip(),
         )
 
